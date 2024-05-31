@@ -27,7 +27,9 @@ main(int argc, char* argv[])
     
     Simulator::Run();
     Simulator::Destroy();
-    MpTcpSocketBase mp = MpTcpSocketBase();
+    Ptr<MpTcpSocketBase> mp = Create<MpTcpSocketBase>();
+
+    
 
     return 0;
 }

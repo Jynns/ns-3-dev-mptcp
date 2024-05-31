@@ -6,40 +6,8 @@ namespace ns3
 {
 NS_OBJECT_ENSURE_REGISTERED(MpTcpSocketBase);
 
-typedef enum
-{
-  MP_NONE,        // 0
-  MP_MPC,         // 1
-  MP_ADDR,        // 2
-  MP_JOIN
-} MpStates_t;
-
-typedef enum
-{
-  Uncoupled_TCPs,         // 0
-  Linked_Increases,       // 1
-  RTT_Compensator,        // 2
-  Fully_Coupled,          // 3
-  COUPLED_SCALABLE_TCP,   // 4
-  UNCOUPLED,              // 5
-  COUPLED_EPSILON,        // 6
-  COUPLED_INC,            // 7
-  COUPLED_FULLY           // 8
-} CongestionCtrl_t;
-typedef enum
-{
-  Round_Robin
-} DataDistribAlgo_t;
-
-typedef enum
-{
-  Default,
-  FullMesh,
-  NdiffPorts
-} PathManager_t;
-
 TypeId
-MpTcpSocketBase::GetTypeId(void)
+MpTcpSocketBase::GetTypeId()
 {
   static TypeId tid = TypeId("ns3::MpTcpSocketBase")
       .SetParent<TcpSocketBase>()
@@ -84,11 +52,11 @@ MpTcpSocketBase::GetTypeId(void)
           MakeUintegerAccessor(&MpTcpSocketBase::m_rGap),
           MakeUintegerChecker<uint32_t>())
 
-      .AddAttribute("Subflows",
+      /*.AddAttribute("Subflows",
                     "The list of sub-flows associated to this protocol.",
           ObjectVectorValue(),
           MakeObjectVectorAccessor(&MpTcpSocketBase::subflows),
-          MakeObjectVectorChecker<MpTcpSocketBase>())
+          MakeObjectVectorChecker<MpTcpSocketBase>())*/
 
       .AddAttribute ("ShortFlowTCP", "Use TCP for short flows",
           BooleanValue (false),

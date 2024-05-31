@@ -26,6 +26,8 @@
 // #include "ns3/gnuplot.h"
 //#include "mp-tcp-subflow.h"
 #include "ns3/output-stream-wrapper.h"
+#include "ns3/object-base.h"
+#include "ns3/mp-tcp-typedef.h"
 
 #define A 1
 #define B 2
@@ -39,7 +41,7 @@ class Node;
 class Packet;
 class TcpL4Protocol;
 
-class MpTcpSocketBase //: public TcpSocketBase
+class MpTcpSocketBase : public TcpSocketBase //: public TcpSocketBase
 {
 public: // public methods
 
@@ -78,7 +80,7 @@ protected:
   uint8_t  lastUsedsFlowIdx;
 
   // MPTCP containers
-  vector<Ptr<MpTcpSubFlow> > subflows;
+  //vector<Ptr<MpTcpSubFlow> > subflows;
 
   // Congestion control
   double alpha;

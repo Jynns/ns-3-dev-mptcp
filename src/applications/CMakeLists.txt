@@ -25,6 +25,7 @@ build_lib(
     model/udp-server.cc
     model/udp-trace-client.cc
     model/mp-tcp-socket-base.cc
+    model/mp-tcp-typedef.cc
   HEADER_FILES
     helper/bulk-send-helper.h
     helper/on-off-helper.h
@@ -35,6 +36,7 @@ build_lib(
     model/application-packet-probe.h
     model/bulk-send-application.h
     model/mp-tcp-socket-base.h
+    model/mp-tcp-typedef.h
     model/onoff-application.h
     model/packet-loss-counter.h
     model/packet-sink.h
