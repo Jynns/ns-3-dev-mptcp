@@ -1,3 +1,16 @@
+## the origional project that the mptcp-code is based on can be found here:
+[mptcp](https://github.com/mkheirkhah/mptcp)
+
+@article{kheirkhah2015multipath,
+  author  = {Kheirkhah, Morteza and Wakeman, Ian and Parisis, George},
+  title   = {{Multipath-TCP in ns-3}},
+  journal = {CoRR},
+  year    = {2015},
+  url     = {http://arxiv.org/abs/1510.07721},
+  archivePrefix = {arXiv},
+}
+
+
 # The Network Simulator, Version 3
 
 [![codecov](https://codecov.io/gh/nsnam/ns-3-dev-git/branch/master/graph/badge.svg)](https://codecov.io/gh/nsnam/ns-3-dev-git/branch/master/)
@@ -214,15 +227,5 @@ listing third-party modules for ns-3 available on the Internet.
 More information on how to submit an ns-3 module to the ns-3 App Store is available
 in the [ns-3 App Store documentation](https://www.nsnam.org/docs/contributing/html/external.html).
 
-## the origional project that the mptcp-code is based on can be found here:
-[mptcp](https://github.com/mkheirkhah/mptcp)
 
-@article{kheirkhah2015multipath,
-  author  = {Kheirkhah, Morteza and Wakeman, Ian and Parisis, George},
-  title   = {{Multipath-TCP in ns-3}},
-  journal = {CoRR},
-  year    = {2015},
-  url     = {http://arxiv.org/abs/1510.07721},
-  archivePrefix = {arXiv},
-}
 
