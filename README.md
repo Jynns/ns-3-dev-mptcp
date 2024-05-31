@@ -1,4 +1,4 @@
-## the origional project that the mptcp-code is based on can be found here:
+## the original project that the mptcp-code is based on can be found here:
 [mptcp](https://github.com/mkheirkhah/mptcp)
 
 @article{kheirkhah2015multipath,
