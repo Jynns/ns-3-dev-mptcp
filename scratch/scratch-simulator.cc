@@ -14,6 +14,7 @@
  */
 
 #include "ns3/core-module.h"
+#include "ns3/mp-tcp-socket-base.h"
 
 using namespace ns3;
 
@@ -23,9 +24,10 @@ int
 main(int argc, char* argv[])
 {
     NS_LOG_UNCOND("Scratch Simulator");
-
+    
     Simulator::Run();
     Simulator::Destroy();
+    MpTcpSocketBase mp = MpTcpSocketBase();
 
     return 0;
 }
