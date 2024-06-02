@@ -28,6 +28,7 @@
 #include "ns3/output-stream-wrapper.h"
 #include "ns3/object-base.h"
 #include "ns3/mp-tcp-typedef.h"
+#include "ns3/tcp-l4-protocol.h"
 
 #define A 1
 #define B 2
@@ -39,7 +40,6 @@ namespace ns3
 class Ipv4EndPoint;
 class Node;
 class Packet;
-class TcpL4Protocol;
 
 class MpTcpSocketBase : public TcpSocketBase //: public TcpSocketBase
 {
@@ -47,14 +47,37 @@ public: // public methods
 
   static TypeId GetTypeId(void);
   MpTcpSocketBase();
-  MpTcpSocketBase(Ptr<Node> node);
+  //MpTcpSocketBase(Ptr<Node> node);
   virtual ~MpTcpSocketBase();
+
+  // Public interface for MPTCP
+  virtual int Bind();                         // Bind a socket by setting up endpoint in TcpL4Protocol
+  virtual int Bind(const Address &address);   // Bind a socket ... to specific add:port; set net device befor 
+  virtual int Connect(const Address &address);
+  virtual int Connect(Ipv4Address servAddr, uint16_t servPort);
 
   void SetCongestionCtrlAlgo(CongestionCtrl_t ccalgo);
   void SetSchedulingAlgo(DataDistribAlgo_t ddalgo);
   void SetPathManager(PathManager_t pManagerMode);
 
-
+  // public variables
+  // Evaluation & plotting parameters and containers
+  double fLowStartTime;
+  int mod;
+  int MSS;
+  int LinkCapacity;
+  int totalBytes;
+  double RTT;
+  double lostRate;
+  double TimeScale;
+  // Only for plotting purpose
+  uint32_t pAck;
+  uint32_t FullAcks;
+  uint32_t TimeOuts;
+  uint32_t FastReTxs;
+  uint32_t FastRecoveries;
+  bool flowCompletionTime;
+  //uint64_t TxBytes;
   uint32_t flowId;
   string flowType;
   string outputFileName;
@@ -65,11 +88,40 @@ public: // public methods
   uint32_t m_rGap;
   bool m_shortFlowTCP;
 
+
+  std::list<uint32_t> sampleList;
+
+  vector<pair<double, double> > totalCWNDtrack;
+  vector<pair<double, double> > reTxTrack;
+  vector<pair<double, double> > timeOutTrack;
+  vector<pair<double, double> > PartialAck;
+  vector<pair<double, double> > FullAck;
+  vector<pair<double, double> > DupAcks;
+  vector<pair<double, double> > PacketDrop;
+  vector<pair<double, double> > TxQueue;
+
+
 protected:
+  // TODO is this really necessary?
+  friend class Tcp;
+
   CongestionCtrl_t m_algocc; 
   DataDistribAlgo_t m_scheduler;
   PathManager_t m_pathManager;
   
+  // MPTCP connection parameters
+  //Ptr<Node>          m_node;
+  //Ipv4EndPoint*      m_endPoint;
+  //Ptr<TcpL4Protocol> m_mptcp;
+  Ipv4Address        m_localAddress;
+  Ipv4Address        m_remoteAddress;
+  uint16_t           m_localPort;
+  uint16_t           m_remotePort;
+  uint8_t            currentSublow;
+
+  // MultiPath related parameters
+  MpStates_t mpSendState;
+  MpStates_t mpRecvState;
   bool mpEnabled;
   bool mpTokenRegister;
   bool addrAdvertised;
@@ -79,8 +131,11 @@ protected:
   uint8_t  maxSubflows;
   uint8_t  lastUsedsFlowIdx;
 
-  // MPTCP containers
+  // MPTCP containers  vector<Ptr<MpTcpSubFlow> > subflows;
   //vector<Ptr<MpTcpSubFlow> > subflows;
+  vector<MpTcpAddressInfo *> localAddrs;
+  vector<MpTcpAddressInfo *> remoteAddrs;
+  list<DSNMapping *> unOrdered;
 
   // Congestion control
   double alpha;
@@ -100,6 +155,12 @@ protected:
   uint64_t nextTxSequence;       // Next expected sequence number to send in connection level
   uint64_t nextRxSequence;       // Next expected sequence number to receive in connection level
 
+  // Buffer management
+  DataBuffer sendingBuffer;
+  DataBuffer recvingBuffer;
+
+  bool client;
+  bool server;
 
 };
 
