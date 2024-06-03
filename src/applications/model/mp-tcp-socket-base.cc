@@ -1,5 +1,7 @@
 #include "ns3/mp-tcp-socket-base.h"
 
+#include "mp-tcp-socket-base.h"
+
 NS_LOG_COMPONENT_DEFINE("MpTcpSocketBase");
 using namespace std;
 
@@ -341,6 +343,39 @@ void
 MpTcpSocketBase::SetPathManager(PathManager_t pManagerMode)
 {
     m_pathManager = pManagerMode;
+}
+
+void
+MpTcpSocketBase::SendEmptyPacket(uint8_t sFlowId, uint8_t flags)
+{
+    NS_LOG_FUNCTION(this << (int)sFlowIdx);
+    Ptr<MpTcpSubFlow> sFlow = subflows[sFlowIdx];
+
+    SequenceNumber32 seq = SequenceNumber32(sFlow->TxSeqNumber);
+
+    if (sFlow->m_endPoint == 0)
+    {
+        NS_FATAL_ERROR("Failed to send empty packet due to null subflow's endpoint");
+        NS_LOG_WARN("Failed to send empty packet due to null subflow's endpoint");
+        return;
+    }
+
+    if (flags & TcpHeader::FIN)
+    {
+        // flags |= TcpHeader::ACK;
+        if (sFlow->maxSeqNb != sFlow->TxSeqNumber - 1)
+        {
+            NS_ASSERT(client);
+            s = sFlow->maxSeqNb + 1;
+        }
+    }
+    else if (m_state == FIN_WAIT_1 || m_state == LAST_ACK || m_state == CLOSING)
+    {
+        ++s;
+    }
+
+    // call to socket base function; senseless since we would have to modify almost every line
+    // SendEmptyPacket(flags);
 }
 
 } // namespace ns3

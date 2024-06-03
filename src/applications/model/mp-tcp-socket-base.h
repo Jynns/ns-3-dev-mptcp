@@ -102,6 +102,16 @@ public: // public methods
 
 
 protected:
+//protected methods
+  // Transfer operations
+  //void ForwardUp(Ptr<Packet> p, Ipv4Header header, uint16_t port, Ptr<Ipv4Interface> interface);
+  //virtual void DoForwardUp(Ptr<Packet> p, Ipv4Header header, uint16_t port, Ptr<Ipv4Interface> interface);
+  //virtual bool SendPendingData(uint8_t sFlowId = -1);
+  void SendEmptyPacket(uint8_t sFlowId, uint8_t flags);
+  //void SendRST(uint8_t sFlowIdx);
+  //virtual int SendDataPacket (uint8_t sFlowIdx, uint32_t pktSize, bool withAck);
+
+//protected variables 
   // TODO is this really necessary?
   friend class Tcp;
 
