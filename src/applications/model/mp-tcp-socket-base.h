@@ -24,7 +24,7 @@
 //#include "ns3/mp-tcp-typedefs.h"
 #include "ns3/tcp-socket-base.h"
 // #include "ns3/gnuplot.h"
-//#include "mp-tcp-subflow.h"
+#include "mp-tcp-subflow.h"
 #include "ns3/output-stream-wrapper.h"
 #include "ns3/object-base.h"
 #include "ns3/mp-tcp-typedef.h"
@@ -142,7 +142,7 @@ protected:
   uint8_t  lastUsedsFlowIdx;
 
   // MPTCP containers  vector<Ptr<MpTcpSubFlow> > subflows;
-  //vector<Ptr<MpTcpSubFlow> > subflows;
+  vector<Ptr<MpTcpSubFlow> > subflows;
   vector<MpTcpAddressInfo *> localAddrs;
   vector<MpTcpAddressInfo *> remoteAddrs;
   list<DSNMapping *> unOrdered;

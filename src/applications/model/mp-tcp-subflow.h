@@ -71,7 +71,7 @@ public:
   EventId m_lastAckEvent;     // Timer for last ACK
   EventId m_timewaitEvent;    // Timer for closing connection at sender side
   uint32_t MSS;               // Maximum Segment Size
-  uint32_t cnCount;           // Count of remaining connection retries
+  uint32_t m_synCount;           // Count of remaining connection retries
   uint32_t cnRetries;         // Number of connection retries before giving up
   Time     cnTimeout;         // Timeout for connection retry
   TracedValue<uint32_t> cwnd; // Congestion window (in bytes)

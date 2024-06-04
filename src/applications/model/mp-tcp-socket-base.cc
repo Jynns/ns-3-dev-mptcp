@@ -296,7 +296,7 @@ MpTcpSocketBase::Connect(Ipv4Address servAddr, uint16_t servPort)
     sFlow->rtt->Reset(); // Dangerous ?!?!?! Not really?
     sFlow->cnTimeout = m_cnTimeout;
     sFlow->cnRetries = m_cnRetries;
-    sFlow->cnCount = sFlow->cnRetries;
+    sFlow->m_synCount = sFlow->cnRetries;
 
     //  if (sFlow->state == CLOSED || sFlow->state == LISTEN || sFlow->state == SYN_SENT ||
     //  sFlow->state == LAST_ACK || sFlow->state == CLOSE_WAIT)
@@ -366,16 +366,62 @@ MpTcpSocketBase::SendEmptyPacket(uint8_t sFlowId, uint8_t flags)
         if (sFlow->maxSeqNb != sFlow->TxSeqNumber - 1)
         {
             NS_ASSERT(client);
-            s = sFlow->maxSeqNb + 1;
+            seq = sFlow->maxSeqNb + 1;
         }
     }
     else if (m_state == FIN_WAIT_1 || m_state == LAST_ACK || m_state == CLOSING)
     {
-        ++s;
+        ++seq;
     }
 
     // call to socket base function; senseless since we would have to modify almost every line
     // SendEmptyPacket(flags);
+    TcpHeader header;
+    header.SetSourcePort(sFlow->sPort);
+    header.SetDestinationPort(sFlow->dPort);
+    header.SetFlags(flags);
+    header.SetSequenceNumber(seq);
+
+    header.SetAckNumber(SequenceNumber32(sFlow->RxSeqNumber));
+    header.SetWindowSize(AdvertisedWindowSize());
+
+    bool hasSyn = flags & TcpHeader::SYN;
+    bool hasFin = flags & TcpHeader::FIN;
+    bool isAck = flags == TcpHeader::ACK;
+
+    // RTO = srtt + 4* rttvar; here the og implementation from socket-base
+    m_rto = Max(sFlow->rtt->GetEstimate() + Max(m_clockGranularity, sFlow->rtt->GetVariation() * 4), m_minRto);
+
+    if (hasSyn)
+    {
+      if (sFlow->m_synCount == 0)
+        { // No more connection retries, give up
+          cout << "[" << m_node->GetId() << "]{" << flowId << "}(" << flowType<< ")" << sFlow->m_synCount << endl;
+          NS_LOG_UNCOND(Simulator::Now().GetSeconds() << " ["<< m_node->GetId() << "] (" << (int)sFlow->routeId
+              << ") SendEmptyPacket(" <<TcpFlagPrinter(flags) << ") hasSyn -> Connection failed."
+              << " Subflow's state: " << TcpStateName[sFlow->state] << " Connection's state: "
+              << TcpStateName[m_state] << " NumSubflows: " << subflows.size() << " SendingBuffer: "
+              << sendingBuffer.PendingData() << " SubflowBufferSize: "<< sFlow->mapDSN.size());
+
+          // If intial subflow stuck on establishing a connection then close entire endpoint!
+          if (subflows.size() == 1)
+            { // If there is only one subflow we can safely tear down entire connection
+              CloseAndNotifyAllSubflows();
+              return;
+            }
+
+          CloseAndNotify(sFlow->routeId); // what if only one subflow failed to connect??
+          return;
+        }
+      else
+        { // Exponential backoff of connection time out
+          int backoffCount = 0x1 << (sFlow->cnRetries - sFlow->m_synCount);
+          RTO = Seconds(sFlow->cnTimeout.GetSeconds() * backoffCount);
+          sFlow->m_synCount = sFlow->m_synCount - 1;
+          NS_LOG_UNCOND(Simulator::Now().GetSeconds() << " ["<< m_node->GetId() << "] ("<< (int)sFlow->routeId<< ") " << flowType << " SendEmptyPacket -> backoffCount: " << backoffCount << " RTO: " << RTO.GetSeconds() << " cnTimeout: " << sFlow->cnTimeout.GetSeconds() <<" m_synCount: "<< sFlow->m_synCount);
+        }
+    }
+
 }
 
 } // namespace ns3
