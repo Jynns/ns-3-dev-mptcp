@@ -107,9 +107,20 @@ protected:
   //void ForwardUp(Ptr<Packet> p, Ipv4Header header, uint16_t port, Ptr<Ipv4Interface> interface);
   //virtual void DoForwardUp(Ptr<Packet> p, Ipv4Header header, uint16_t port, Ptr<Ipv4Interface> interface);
   //virtual bool SendPendingData(uint8_t sFlowId = -1);
-  void SendEmptyPacket(uint8_t sFlowId, uint8_t flags);
+  virtual void SendEmptyPacket(uint8_t sFlowId, uint8_t flags);
   //void SendRST(uint8_t sFlowIdx);
   //virtual int SendDataPacket (uint8_t sFlowIdx, uint32_t pktSize, bool withAck);
+  virtual bool IsThereRoute(Ipv4Address src, Ipv4Address dst);
+
+  //connection and closing operations
+  void CloseAndNotify(uint8_t sFlowIdx);
+  void CloseAndNotifyAllSubflows();
+  void DeallocateEndPoint(uint8_t sFlowIdx);
+  bool CloseMultipathConnection();      // Close MPTCP connection is possible
+  //void CancelAllTimers(uint8_t sFlowIdx);
+
+//helper function 
+  string TcpFlagPrinter(uint8_t);
 
 //protected variables 
   // TODO is this really necessary?

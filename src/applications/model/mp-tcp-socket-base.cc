@@ -1,4 +1,4 @@
-#include "ns3/mp-tcp-socket-base.h"
+// #include "ns3/mp-tcp-socket-base.h"
 
 #include "mp-tcp-socket-base.h"
 
@@ -283,8 +283,7 @@ MpTcpSocketBase::Connect(Ipv4Address servAddr, uint16_t servPort)
     sFlow->sPort = m_endPoint->GetLocalPort();
     sFlow->MSS = segmentSize;
     sFlow->cwnd = sFlow->MSS;
-    NS_LOG_UNCOND("Connect -> SegmentSize: " << sFlow->MSS << " tcpSegmentSize: " << m_segmentSize
-                                             << " segmentSize: " << segmentSize
+    NS_LOG_UNCOND("Connect -> SegmentSize: " << sFlow->MSS << " segmentSize: " << segmentSize
                                              << "SendingBufferSize: " << sendingBuffer.bufMaxSize);
 
     // This is master subsocket (master subflow) then its endpoint is the same as connection
@@ -295,7 +294,7 @@ MpTcpSocketBase::Connect(Ipv4Address servAddr, uint16_t servPort)
 
     sFlow->rtt->Reset(); // Dangerous ?!?!?! Not really?
     sFlow->cnTimeout = m_cnTimeout;
-    sFlow->cnRetries = m_cnRetries;
+    sFlow->cnRetries = m_synRetries;
     sFlow->m_synCount = sFlow->cnRetries;
 
     //  if (sFlow->state == CLOSED || sFlow->state == LISTEN || sFlow->state == SYN_SENT ||
@@ -346,7 +345,7 @@ MpTcpSocketBase::SetPathManager(PathManager_t pManagerMode)
 }
 
 void
-MpTcpSocketBase::SendEmptyPacket(uint8_t sFlowId, uint8_t flags)
+MpTcpSocketBase::SendEmptyPacket(uint8_t sFlowIdx, uint8_t flags)
 {
     NS_LOG_FUNCTION(this << (int)sFlowIdx);
     Ptr<MpTcpSubFlow> sFlow = subflows[sFlowIdx];
@@ -390,38 +389,327 @@ MpTcpSocketBase::SendEmptyPacket(uint8_t sFlowId, uint8_t flags)
     bool isAck = flags == TcpHeader::ACK;
 
     // RTO = srtt + 4* rttvar; here the og implementation from socket-base
-    m_rto = Max(sFlow->rtt->GetEstimate() + Max(m_clockGranularity, sFlow->rtt->GetVariation() * 4), m_minRto);
+    ns3::Time RTO =
+        Max(sFlow->rtt->GetEstimate() + Max(m_clockGranularity, sFlow->rtt->GetVariation() * 4),
+            m_minRto);
 
     if (hasSyn)
     {
-      if (sFlow->m_synCount == 0)
+        if (sFlow->m_synCount == 0)
         { // No more connection retries, give up
-          cout << "[" << m_node->GetId() << "]{" << flowId << "}(" << flowType<< ")" << sFlow->m_synCount << endl;
-          NS_LOG_UNCOND(Simulator::Now().GetSeconds() << " ["<< m_node->GetId() << "] (" << (int)sFlow->routeId
-              << ") SendEmptyPacket(" <<TcpFlagPrinter(flags) << ") hasSyn -> Connection failed."
-              << " Subflow's state: " << TcpStateName[sFlow->state] << " Connection's state: "
-              << TcpStateName[m_state] << " NumSubflows: " << subflows.size() << " SendingBuffer: "
-              << sendingBuffer.PendingData() << " SubflowBufferSize: "<< sFlow->mapDSN.size());
+            cout << "[" << m_node->GetId() << "]{" << flowId << "}(" << flowType << ")"
+                 << sFlow->m_synCount << endl;
+            NS_LOG_UNCOND(Simulator::Now().GetSeconds()
+                          << " [" << m_node->GetId() << "] (" << (int)sFlow->routeId
+                          << ") SendEmptyPacket(" << TcpFlagPrinter(flags)
+                          << ") hasSyn -> Connection failed."
+                          << " Subflow's state: " << TcpStateName[sFlow->state]
+                          << " Connection's state: " << TcpStateName[m_state] << " NumSubflows: "
+                          << subflows.size() << " SendingBuffer: " << sendingBuffer.PendingData()
+                          << " SubflowBufferSize: " << sFlow->mapDSN.size());
 
-          // If intial subflow stuck on establishing a connection then close entire endpoint!
-          if (subflows.size() == 1)
+            // If intial subflow stuck on establishing a connection then close entire endpoint!
+            if (subflows.size() == 1)
             { // If there is only one subflow we can safely tear down entire connection
-              CloseAndNotifyAllSubflows();
-              return;
+                CloseAndNotifyAllSubflows();
+                return;
             }
 
-          CloseAndNotify(sFlow->routeId); // what if only one subflow failed to connect??
-          return;
+            CloseAndNotify(sFlow->routeId); // what if only one subflow failed to connect??
+            return;
         }
-      else
+        else
         { // Exponential backoff of connection time out
-          int backoffCount = 0x1 << (sFlow->cnRetries - sFlow->m_synCount);
-          RTO = Seconds(sFlow->cnTimeout.GetSeconds() * backoffCount);
-          sFlow->m_synCount = sFlow->m_synCount - 1;
-          NS_LOG_UNCOND(Simulator::Now().GetSeconds() << " ["<< m_node->GetId() << "] ("<< (int)sFlow->routeId<< ") " << flowType << " SendEmptyPacket -> backoffCount: " << backoffCount << " RTO: " << RTO.GetSeconds() << " cnTimeout: " << sFlow->cnTimeout.GetSeconds() <<" m_synCount: "<< sFlow->m_synCount);
+            int backoffCount = 0x1 << (sFlow->cnRetries - sFlow->m_synCount);
+            RTO = Seconds(sFlow->cnTimeout.GetSeconds() * backoffCount);
+            sFlow->m_synCount = sFlow->m_synCount - 1;
+            NS_LOG_UNCOND(Simulator::Now().GetSeconds()
+                          << " [" << m_node->GetId() << "] (" << (int)sFlow->routeId << ") "
+                          << flowType << " SendEmptyPacket -> backoffCount: " << backoffCount
+                          << " RTO: " << RTO.GetSeconds() << " cnTimeout: "
+                          << sFlow->cnTimeout.GetSeconds() << " m_synCount: " << sFlow->m_synCount);
+        }
+        // TODO the og implementation calls here update RTT history; UpdateRttHistory m_history
+    }
+    if (((sFlow->state == SYN_SENT) || (sFlow->state == SYN_RCVD && mpEnabled == true)) &&
+        mpSendState == MP_NONE)
+    {
+        /*mpSendState = MP_MPC;                  // This state means MP_MPC is sent
+        do
+          { // Prevent repetition of localToken to a node
+            localToken = rand();        // Random Local Token
+          }
+        while (m_tcp->m_TokenMap.count(localToken) != 0 || localToken == 0);
+        NS_ASSERT(m_tcp->m_TokenMap.count(localToken) == 0 && localToken != 0);
+        header.AddOptMPC(OPT_MPC, localToken); // Adding MP_CAPABLE & Token to TCP option (5 Bytes)
+        olen += 5;
+        m_tcp->m_TokenMap[localToken] = m_endPoint;
+        //m_tcp->m_TokenMap.insert(std::make_pair(localToken, m_endPoint)) NS_LOG_UNCOND("["<<
+        m_node->GetId() << "] ("<< (int)sFlow->routeId<< ") SendEmptyPacket -> LOCALTOKEN is mapped
+        to connection endpoint -> " << localToken << " -> " << m_endPoint << " TokenMapsSize: "<<
+        m_tcp->m_TokenMap.size());
+          */
+        NS_LOG_INFO("unimplemented");
+    }
+    else if ((sFlow->state == SYN_SENT && hasSyn &&
+              sFlow->routeId ==
+                  0) /* || (sFlow->state == SYN_RCVD && hasSyn && sFlow->routeId == 0)*/)
+    {
+        // header.AddOptMPC(OPT_MPC, localToken); // Adding MP_CAPABLE & Token to TCP option (5
+        // Bytes) olen += 5;
+        NS_LOG_INFO("unimplemented");
+    }
+    else if (sFlow->state == SYN_SENT && hasSyn && sFlow->routeId != 0)
+    {
+        // header.AddOptJOIN(OPT_JOIN, remoteToken, 0); // addID should be zero?
+        // olen += 6;
+        NS_LOG_INFO("unimplemented");
+    }
+    /*
+    uint8_t plen = (4 - (olen % 4)) % 4;
+    olen = (olen + plen) / 4;
+    hlen = 5 + olen;
+    header.SetLength(hlen);
+    header.SetOptionsLength(olen);
+    header.SetPaddingLength(plen);*/
+
+    // m_tcp->SendPacket(p, header, sFlow->sAddr, sFlow->dAddr, FindOutputNetDevice(sFlow->sAddr));
+    //  sFlow->rtt->SentSeq (sFlow->TxSeqNumber, 1);           // notify the RTT
+
+    if (sFlow->retxEvent.IsExpired() && (hasFin || hasSyn) && !isAck)
+    { // Retransmit SYN / SYN+ACK / FIN / FIN+ACK to guard against lost
+        // RTO = sFlow->rtt->RetransmitTimeout();
+        // sFlow->retxEvent =
+        //    Simulator::Schedule(RTO, &MpTcpSocketBase::SendEmptyPacket, this, sFlowIdx, flags);
+        if (hasSyn)
+        {
+            // cout << this << " ["<< m_node->GetId() << "]("<<(int)sFlowIdx <<") SendEmptyPacket ->
+            // "<< TcpFlagPrinter(flags)<< " ReTxTimer set for SYN / SYN+ACK now " << Simulator::Now
+            // ().GetSeconds () << " Expire at " << (Simulator::Now () + RTO).GetSeconds () << "
+            // RTO: " << RTO.GetSeconds() << " FlowType: " << flowType << " Header: "<< header <<
+            // endl;
+
+            NS_LOG_INFO("unimplemented");
+            // TODO
+            /*NS_LOG_UNCOND(
+                this << " [" << m_node->GetId() << "](" << (int)sFlowIdx << ") SendEmptyPacket -> "
+                     << TcpFlagPrinter(flags) << " ReTxTimer set for SYN / SYN+ACK now "
+                     << Simulator::Now().GetSeconds() << " Expire at "
+                     << (Simulator::Now() + RTO).GetSeconds() << " RTO: " << RTO.GetSeconds()
+                     << " FlowType: " << flowType << " Header: " << header);*/
+        }
+        if (hasFin)
+        {
+            /*NS_LOG_UNCOND(
+                this << " [" << m_node->GetId() << "](" << (int)sFlowIdx << ") SendEmptyPacket -> "
+                     << TcpFlagPrinter(flags) << " ReTxTimer set for FIN / FIN+ACK now "
+                     << Simulator::Now().GetSeconds() << " Expire at "
+                     << (Simulator::Now() + RTO).GetSeconds() << " RTO: " << RTO.GetSeconds()
+                     << " FlowType: " << flowType << " Header: " << header);*/
+            NS_LOG_INFO("unimplemented");
         }
     }
 
+    // if (!isAck)
+    // NS_LOG_INFO("(" << (int)sFlowIdx << ") SendEmptyPacket-> " << header
+    //                << " Length: " << (int)header.GetLength());
+}
+
+bool
+MpTcpSocketBase::IsThereRoute(Ipv4Address src, Ipv4Address dst)
+{
+    NS_LOG_FUNCTION(this << src << dst);
+    return true;
+    /*
+    bool found = false;
+    // Look up the source address
+  //  Ptr<Ipv4> ipv4 = m_node->GetObject<Ipv4>();
+    Ptr<Ipv4L3Protocol> ipv4 = m_node->GetObject<Ipv4L3Protocol>();
+    if (ipv4->GetRoutingProtocol() != 0)
+      {
+        Ipv4Header l3Header;
+        Socket::SocketErrno errno_;
+        Ptr<Ipv4Route> route;
+        //.....................................................................................
+        //NS_LOG_INFO("----------------------------------------------------");NS_LOG_INFO("IsThereRoute()
+  -> src: " << src << " dst: " << dst);
+        // Get interface number from IPv4Address via ns3::Ipv4::GetInterfaceForAddress(Ipv4Address
+  address); int32_t interface = ipv4->GetInterfaceForAddress(src);        // Morteza uses sign
+  integers Ptr<Ipv4Interface> v4Interface = ipv4->GetRealInterfaceForAddress(src); Ptr<NetDevice>
+  v4NetDevice = v4Interface->GetDevice();
+        //PrintIpv4AddressFromIpv4Interface(v4Interface, interface);
+        NS_ASSERT_MSG(interface != -1, "There is no interface object for the the src address");
+        // Get NetDevice from Interface via ns3::Ipv4::GetNetDevice(uint32_t interface);
+        Ptr<NetDevice> oif = ipv4->GetNetDevice(interface);
+        NS_ASSERT(oif == v4NetDevice);
+
+        //.....................................................................................
+        l3Header.SetSource(src);
+        l3Header.SetDestination(dst);
+        route = ipv4->GetRoutingProtocol()->RouteOutput(Ptr<Packet>(), l3Header, oif, errno_);
+        if ((route != 0)*/
+    /* && (src == route->GetSource())*/ /*)
+{
+NS_LOG_DEBUG ("IsThereRoute -> Route from src "<< src << " to dst " << dst << " oit ["<<
+oif->GetIfIndex()<<"], exist  Gateway: " << route->GetGateway()); found = true;
+}
+else
+{
+NS_LOG_DEBUG ("IsThereRoute -> No Route from srcAddr "<< src << " to dstAddr " << dst << " oit
+["<<oif->GetIfIndex()<<"], exist Gateway: " << route->GetGateway());
+}
+}
+return found;
+*/
+}
+
+string
+MpTcpSocketBase::TcpFlagPrinter(uint8_t flag)
+{
+    ostringstream oss;
+    oss << "[";
+    if (flag & TcpHeader::SYN)
+        oss << " SYN ";
+    if (flag & TcpHeader::FIN)
+        oss << " FIN ";
+    if (flag & TcpHeader::ACK)
+        oss << " ACK ";
+    if (flag & TcpHeader::RST)
+        oss << " RST ";
+    if (flag & TcpHeader::NONE)
+        oss << " NONE";
+    oss << "]";
+    string tmp = oss.str();
+    oss.str("");
+    return tmp;
+}
+
+void
+MpTcpSocketBase::CloseAndNotifyAllSubflows()
+{
+    NS_LOG_UNCOND(Simulator::Now().GetSeconds()
+                  << " [" << m_node->GetId()
+                  << "] CloseAndNotifyAllSubflows -> subflowSize: " << subflows.size());
+    // Change state of all subflow to CLOSED then call to CloseAndNotify(sFlowIdx)
+    for (uint32_t i = 0; i < subflows.size(); i++)
+    {
+        // subflows[i]->state = CLOSED;
+        CloseAndNotify(subflows[i]->routeId);
+    }
+}
+
+void
+MpTcpSocketBase::CloseAndNotify(uint8_t sFlowIdx)
+{
+    NS_LOG_FUNCTION(this << (int)sFlowIdx);
+    Ptr<MpTcpSubFlow> sFlow = subflows[sFlowIdx];
+    //  if (!m_closeNotified)
+    //    {
+    //      NotifyNormalClose();
+    //    }
+    if (sFlow->state != TIME_WAIT)
+    {
+        NS_LOG_INFO("(" << (int)sFlowIdx << ") CloseAndNotify -> DeallocateEndPoint()");
+        DeallocateEndPoint(sFlowIdx);
+    }
+    NS_LOG_INFO("(" << (int)sFlowIdx
+                    << ") CloseAndNotify -> CancelAllTimers() and change the state");
+    // m_closeNotified = true;
+    // CancelAllTimers(sFlowIdx);
+    NS_LOG_INFO("(" << (int)sFlowIdx << ") " << TcpStateName[sFlow->state]
+                    << " -> CLOSED {CloseAndNotify}");
+    sFlow->state = CLOSED; // Can we remove closed subflow from subflow container????
+    // CloseMultipathConnection();
+}
+
+void
+MpTcpSocketBase::DeallocateEndPoint(uint8_t sFlowIdx)
+{
+    NS_LOG_FUNCTION(this << (int)sFlowIdx);
+    Ptr<MpTcpSubFlow> sFlow = subflows[sFlowIdx];
+    // Master subflow would be closed when all other slave's subflows are closed.
+    if (sFlowIdx == 0)
+    {
+        NS_LOG_INFO("(" << (int)sFlowIdx
+                        << ") DeallocateEndPoint -> Master Subflow want to deallocate its "
+                           "endpoint, call on CloseMultipathConnection()");
+        CloseMultipathConnection();
+    }
+    // Slave's subflows
+    else
+    {
+        if (sFlow->m_endPoint != 0)
+        {
+            NS_LOG_INFO("Salve subflow (" << (int)sFlowIdx << ") is deallocated its endpoint");
+            sFlow->m_endPoint->SetDestroyCallback(MakeNullCallback<void>());
+            m_tcp->DeAllocate(sFlow->m_endPoint);
+            sFlow->m_endPoint = 0;
+            // CancelAllTimers(sFlowIdx); OUT
+        }
+    }
+}
+
+bool
+MpTcpSocketBase::CloseMultipathConnection()
+{
+    NS_LOG_FUNCTION_NOARGS();
+    bool closed = false;
+    uint32_t cpt = 0;
+    for (uint32_t i = 0; i < subflows.size(); i++)
+    {
+        NS_LOG_LOGIC("Subflow (" << i << ") TxSeqNb (" << subflows[i]->TxSeqNumber
+                                 << ") RxSeqNb = " << subflows[i]->RxSeqNumber << " highestAck ("
+                                 << subflows[i]->highestAck << ") maxSeqNb ("
+                                 << subflows[i]->maxSeqNb << ")");
+
+        if (subflows[i]->state == CLOSED)
+            cpt++;
+        if (subflows[i]->state == TIME_WAIT)
+        {
+            NS_LOG_INFO("(" << (int)subflows[i]->routeId << ") " << TcpStateName[subflows[i]->state]
+                            << " -> CLOSED {CloseMultipathConnection}");
+            subflows[i]->state = CLOSED;
+            cpt++;
+        }
+    }
+    if (cpt == subflows.size())
+    {
+        if (m_state == ESTABLISHED && client) // We could remove client ... it should work but it
+                                              // generate plots for receiver as well.
+        {
+            NS_LOG_INFO("CloseMultipathConnection -> GENERATE PLOTS SUCCESSFULLY -> HoOoOrA  pAck: "
+                        << pAck);
+            //          GenerateCWNDPlot();
+            //          GenerateSendvsACK();
+            //          GeneratePlots();
+        }
+        if (m_state != CLOSED)
+        {
+            NS_LOG_UNCOND(Simulator::Now().GetSeconds()
+                          << "[" << m_node->GetId()
+                          << "] CloseMultipathConnection -> MPTCP connection is closed {" << this
+                          << "}, m_state: " << TcpStateName[m_state] << " -> CLOSED"
+                          << " CurrentSubflow (" << (int)currentSublow
+                          << ") SubflowsSize: " << subflows.size());
+            m_state = CLOSED;
+            NotifyNormalClose();
+            m_endPoint->SetDestroyCallback(
+                MakeNullCallback<void>()); // Remove callback to destroy()
+            m_tcp->DeAllocate(m_endPoint); // Deallocating the endPoint
+            m_endPoint = 0;
+            if (subflows.size() > 0)
+                subflows[0]->m_endPoint = 0;
+            m_tcp->RemoveSocket(this);
+            // m_tcp->RemoveLocalToken(localToken);
+            /*std::vector<Ptr<TcpSocketBase> >::iterator it = std::find(m_tcp->m_sockets.begin(),
+            m_tcp->m_sockets.end(), this); m_tcp->m_sockets if (it != m_tcp->m_sockets.end())
+              {
+                m_tcp->m_sockets.erase(it);
+              }*/
+            CancelAllSubflowTimers();
+        }
+    }
+    return closed;
 }
 
 } // namespace ns3

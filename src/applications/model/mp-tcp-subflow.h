@@ -38,19 +38,20 @@
 #include "ns3/tcp-socket.h"
 #include "ns3/ipv4-end-point.h"
 #include "ns3/ipv4-address.h"
+#include "ns3/mp-tcp-typedef.h"
 
 using namespace std;
 
 namespace ns3{
 
-class MpTcpSubFlow  //public TcpSocketBase
+class MpTcpSubFlow : public Object
 {
 public:
   static TypeId
   GetTypeId(void);
 
   MpTcpSubFlow();
-  virtual ~MpTcpSubFlow();
+  ~MpTcpSubFlow();
 
   void AddDSNMapping(uint8_t sFlowIdx, uint64_t dSeqNum, uint16_t dLvlLen, uint32_t sflowSeqNum, uint32_t ack/*, Ptr<Packet> pkt*/);
   void StartTracing(string traced);

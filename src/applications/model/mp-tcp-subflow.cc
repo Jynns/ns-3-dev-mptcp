@@ -20,9 +20,7 @@
 
 #include <iostream>
 #include "ns3/simulator.h"
-#include "ns3/log.h"
 #include "mp-tcp-subflow.h"
-#include "mp-tcp-socket-base.cc"
 
 NS_LOG_COMPONENT_DEFINE("MpTcpSubflow");
 
@@ -62,11 +60,12 @@ MpTcpSubFlow::MpTcpSubFlow() :
   ssthresh = 65535;
   maxSeqNb = TxSeqNumber - 1;
   highestAck = 0;
-  rtt = CreateObjectWithAttributes<RttMeanDeviation>(
-    "Alpha", DoubleValue(0.1),
-    "Beta", DoubleValue(0.1),
-    "InitialEstimation", Seconds(1.5)
-  );
+  rtt = CreateObjectWithAttributes<RttMeanDeviation>();
+  //TODO IMPORTANT
+  //  "Alpha", DoubleValue(0.1),
+  //  "Beta", DoubleValue(0.1),
+  //  "InitialEstimation", Seconds(1.5)
+  //);
   //rtt->SetCurrentEstimate(estimate);
   cnRetries = 3;
   Time est = MilliSeconds(200);
