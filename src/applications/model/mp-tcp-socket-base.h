@@ -117,6 +117,7 @@ protected:
   void CloseAndNotifyAllSubflows();
   void DeallocateEndPoint(uint8_t sFlowIdx);
   bool CloseMultipathConnection();      // Close MPTCP connection is possible
+  void CancelAllSubflowTimers(void);
   //void CancelAllTimers(uint8_t sFlowIdx);
 
 //helper function 

@@ -712,4 +712,22 @@ MpTcpSocketBase::CloseMultipathConnection()
     return closed;
 }
 
+void
+MpTcpSocketBase::CancelAllSubflowTimers(void)
+{
+  NS_LOG_FUNCTION_NOARGS();
+  for (uint32_t i = 0; i < subflows.size(); i++)
+    {
+      Ptr<MpTcpSubFlow> sFlow = subflows[i];
+      if (sFlow->state != CLOSED)
+        {
+          sFlow->retxEvent.Cancel();
+          sFlow->m_lastAckEvent.Cancel();
+          sFlow->m_timewaitEvent.Cancel();
+          NS_LOG_INFO("CancelAllSubflowTimers() -> Subflow:" << sFlow->routeId);
+        }
+    }
+}
+
+
 } // namespace ns3
