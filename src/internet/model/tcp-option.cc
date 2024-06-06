@@ -24,6 +24,7 @@
 #include "tcp-option-sack.h"
 #include "tcp-option-ts.h"
 #include "tcp-option-winscale.h"
+#include "mp-tcp-option.h"
 
 #include "ns3/log.h"
 #include "ns3/type-id.h"
@@ -77,6 +78,11 @@ TcpOption::CreateOption(uint8_t kind)
         {TcpOption::SACKPERMITTED, TcpOptionSackPermitted::GetTypeId()},
         {TcpOption::SACK, TcpOptionSack::GetTypeId()},
         {TcpOption::UNKNOWN, TcpOptionUnknown::GetTypeId()},
+        {TcpOption::MP_NONE, MpTcpOptionNone::GetTypeId()},
+        {TcpOption::MP_MPC, MpTcpOptionMultiPathCabable::GetTypeId()},
+        /*{TcpOption::MP_JOIN, TcpOptionUnknown::GetTypeId()},
+        {TcpOption::, TcpOptionUnknown::GetTypeId()},
+        {TcpOption::MP_NONE, TcpOptionUnknown::GetTypeId()},*/
     };
 
     for (unsigned int i = 0; i < sizeof(toTid) / sizeof(KindToTid); ++i)
@@ -103,6 +109,11 @@ TcpOption::IsKindKnown(uint8_t kind)
     case SACKPERMITTED:
     case SACK:
     case TS:
+    case MP_NONE:
+    case MP_MPC:
+    case MP_ADDR:
+    case MP_JOIN:
+    case MP_DSN:
         // Do not add UNKNOWN here
         return true;
     }

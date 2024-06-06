@@ -434,22 +434,22 @@ MpTcpSocketBase::SendEmptyPacket(uint8_t sFlowIdx, uint8_t flags)
     if (((sFlow->state == SYN_SENT) || (sFlow->state == SYN_RCVD && mpEnabled == true)) &&
         mpSendState == MP_NONE)
     {
-        /*mpSendState = MP_MPC;                  // This state means MP_MPC is sent
+        mpSendState = MP_MPC; // This state means MP_MPC is sent
         do
-          { // Prevent repetition of localToken to a node
-            localToken = rand();        // Random Local Token
-          }
-        while (m_tcp->m_TokenMap.count(localToken) != 0 || localToken == 0);
+        {                        // Prevent repetition of localToken to a node
+            localToken = rand(); // Random Local Token
+        } while (m_tcp->m_TokenMap.count(localToken) != 0 || localToken == 0);
         NS_ASSERT(m_tcp->m_TokenMap.count(localToken) == 0 && localToken != 0);
         header.AddOptMPC(OPT_MPC, localToken); // Adding MP_CAPABLE & Token to TCP option (5 Bytes)
         olen += 5;
         m_tcp->m_TokenMap[localToken] = m_endPoint;
-        //m_tcp->m_TokenMap.insert(std::make_pair(localToken, m_endPoint)) NS_LOG_UNCOND("["<<
-        m_node->GetId() << "] ("<< (int)sFlow->routeId<< ") SendEmptyPacket -> LOCALTOKEN is mapped
-        to connection endpoint -> " << localToken << " -> " << m_endPoint << " TokenMapsSize: "<<
-        m_tcp->m_TokenMap.size());
-          */
-        NS_LOG_INFO("unimplemented");
+        // m_tcp->m_TokenMap.insert(std::make_pair(localToken, m_endPoint))
+        /*NS_LOG_UNCOND(
+            "[" << m_node->GetId() << "] (" << (int)sFlow->routeId
+                << ") SendEmptyPacket -> LOCALTOKEN is mapped
+                   to connection endpoint->" << localToken << "->" << m_endPoint << " TokenMapsSize
+            : "<<
+              m_tcp->m_TokenMap.size()); OUT*/
     }
     else if ((sFlow->state == SYN_SENT && hasSyn &&
               sFlow->routeId ==
@@ -615,11 +615,11 @@ MpTcpSocketBase::CloseAndNotify(uint8_t sFlowIdx)
     NS_LOG_INFO("(" << (int)sFlowIdx
                     << ") CloseAndNotify -> CancelAllTimers() and change the state");
     // m_closeNotified = true;
-    // CancelAllTimers(sFlowIdx);
+    CancelAllTimers(sFlowIdx);
     NS_LOG_INFO("(" << (int)sFlowIdx << ") " << TcpStateName[sFlow->state]
                     << " -> CLOSED {CloseAndNotify}");
     sFlow->state = CLOSED; // Can we remove closed subflow from subflow container????
-    // CloseMultipathConnection();
+    CloseMultipathConnection();
 }
 
 void
@@ -644,7 +644,7 @@ MpTcpSocketBase::DeallocateEndPoint(uint8_t sFlowIdx)
             sFlow->m_endPoint->SetDestroyCallback(MakeNullCallback<void>());
             m_tcp->DeAllocate(sFlow->m_endPoint);
             sFlow->m_endPoint = 0;
-            // CancelAllTimers(sFlowIdx); OUT
+            CancelAllTimers(sFlowIdx);
         }
     }
 }
@@ -715,19 +715,29 @@ MpTcpSocketBase::CloseMultipathConnection()
 void
 MpTcpSocketBase::CancelAllSubflowTimers(void)
 {
-  NS_LOG_FUNCTION_NOARGS();
-  for (uint32_t i = 0; i < subflows.size(); i++)
+    NS_LOG_FUNCTION_NOARGS();
+    for (uint32_t i = 0; i < subflows.size(); i++)
     {
-      Ptr<MpTcpSubFlow> sFlow = subflows[i];
-      if (sFlow->state != CLOSED)
+        Ptr<MpTcpSubFlow> sFlow = subflows[i];
+        if (sFlow->state != CLOSED)
         {
-          sFlow->retxEvent.Cancel();
-          sFlow->m_lastAckEvent.Cancel();
-          sFlow->m_timewaitEvent.Cancel();
-          NS_LOG_INFO("CancelAllSubflowTimers() -> Subflow:" << sFlow->routeId);
+            sFlow->retxEvent.Cancel();
+            sFlow->m_lastAckEvent.Cancel();
+            sFlow->m_timewaitEvent.Cancel();
+            NS_LOG_INFO("CancelAllSubflowTimers() -> Subflow:" << sFlow->routeId);
         }
     }
 }
 
+void
+MpTcpSocketBase::CancelAllTimers(uint8_t sFlowIdx)
+{
+    NS_LOG_FUNCTION((int)sFlowIdx);
+    Ptr<MpTcpSubFlow> sFlow = subflows[sFlowIdx];
+    sFlow->retxEvent.Cancel();
+    sFlow->m_lastAckEvent.Cancel();
+    sFlow->m_timewaitEvent.Cancel();
+    NS_LOG_LOGIC("(" << (int)sFlow->routeId << ")" << "CancelAllTimers");
+}
 
 } // namespace ns3

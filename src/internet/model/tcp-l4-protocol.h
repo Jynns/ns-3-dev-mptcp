@@ -86,6 +86,7 @@ class TcpL4Protocol : public IpL4Protocol
      */
     static TypeId GetTypeId();
     static const uint8_t PROT_NUMBER; //!< protocol number (0x6)
+    typedef std::map<uint32_t, Ipv4EndPoint*> TokenMaps; // MPTCP related modification
 
     TcpL4Protocol();
     ~TcpL4Protocol() override;
