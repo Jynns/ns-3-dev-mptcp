@@ -80,9 +80,9 @@ TcpOption::CreateOption(uint8_t kind)
         {TcpOption::UNKNOWN, TcpOptionUnknown::GetTypeId()},
         {TcpOption::MP_NONE, MpTcpOptionNone::GetTypeId()},
         {TcpOption::MP_MPC, MpTcpOptionMultiPathCabable::GetTypeId()},
-        /*{TcpOption::MP_JOIN, TcpOptionUnknown::GetTypeId()},
-        {TcpOption::, TcpOptionUnknown::GetTypeId()},
-        {TcpOption::MP_NONE, TcpOptionUnknown::GetTypeId()},*/
+        {TcpOption::MP_JOIN, MpTcpOptionJoin::GetTypeId()},
+        {TcpOption::MP_ADDR, MpTcpOptionAdress::GetTypeId()},
+        {TcpOption::MP_DSN, MpTcpOptionDataSeqMapping::GetTypeId()},
     };
 
     for (unsigned int i = 0; i < sizeof(toTid) / sizeof(KindToTid); ++i)

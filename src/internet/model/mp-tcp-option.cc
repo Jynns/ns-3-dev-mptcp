@@ -236,4 +236,69 @@ MpTcpOptionAdress::GetSerializedSize() const
     return 5;
 }
 
+MpTcpOptionDataSeqMapping::MpTcpOptionDataSeqMapping()
+{
+}
+
+MpTcpOptionDataSeqMapping::MpTcpOptionDataSeqMapping(uint64_t dSeqNum,
+                                                     uint16_t dLevelLength,
+                                                     uint32_t sfSeqNum):m_dSeqNum{dSeqNum}, m_dLevelLength{dLevelLength}, m_sfSeqNum{sfSeqNum}
+{
+}
+
+MpTcpOptionDataSeqMapping::~MpTcpOptionDataSeqMapping()
+{
+}
+
+TypeId
+MpTcpOptionDataSeqMapping::GetTypeId()
+{
+    static TypeId tid = TypeId("ns3::MpTcpOptionDataSeqMapping")
+                            .SetParent<TcpOption>()
+                            .SetGroupName("Internet")
+                            .AddConstructor<MpTcpOptionDataSeqMapping>();
+    return tid;
+}
+
+TypeId
+MpTcpOptionDataSeqMapping::GetInstanceTypeId() const
+{
+    return GetTypeId();
+}
+
+void
+MpTcpOptionDataSeqMapping::Print(std::ostream& os) const
+{
+    os << "MpTcpOptionDataSeqMapping "  
+}
+
+void
+MpTcpOptionDataSeqMapping::Serialize(Buffer::Iterator start) const
+{
+    start.WriteU64(m_dSeqNum);
+    start.WriteHtonU16(m_dLevelLength);
+    start.WriteHtonU32(m_sfSeqNum);
+}
+
+uint32_t
+MpTcpOptionDataSeqMapping::Deserialize(Buffer::Iterator start)
+{
+    m_dSeqNum = start.ReadU64();
+    m_dLevelLength = start.ReadNtohU16();
+    m_sfSeqNum = start.ReadNtohU32(); 
+    return GetSerializedSize();
+}
+
+uint8_t
+MpTcpOptionDataSeqMapping::GetKind() const
+{
+    return TcpOption::Kind::MP_DSN;
+}
+
+uint32_t
+MpTcpOptionDataSeqMapping::GetSerializedSize() const
+{
+    return 14;
+}
+
 } // namespace ns3
