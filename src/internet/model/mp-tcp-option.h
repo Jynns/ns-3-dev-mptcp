@@ -90,7 +90,7 @@ class MpTcpOptionAdress : public TcpOption
 {
   public:
     MpTcpOptionAdress();
-    MpTcpOptionAdress();
+    MpTcpOptionAdress(uint8_t addrID, ns3::Ipv4Address m_addr);
     ~MpTcpOptionAdress() override;
 
     /**
@@ -108,7 +108,7 @@ class MpTcpOptionAdress : public TcpOption
     uint32_t GetSerializedSize() const override;
   private:
     ns3::Ipv4Address m_addr;
-    u_int8_t m_addrId;
+    uint8_t m_addrId;
 
 };
 

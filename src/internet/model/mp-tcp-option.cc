@@ -2,7 +2,7 @@
 
 namespace ns3
 {
-NS_LOG_COMPONENT_DEFINE("MpTcpOptionNone");
+NS_LOG_COMPONENT_DEFINE("MpTcpOption");
 
 NS_OBJECT_ENSURE_REGISTERED(MpTcpOptionNone);
 
@@ -171,6 +171,67 @@ MpTcpOptionJoin::GetKind() const
 
 uint32_t
 MpTcpOptionJoin::GetSerializedSize() const
+{
+    return 5;
+}
+
+MpTcpOptionAdress::MpTcpOptionAdress()
+{
+}
+
+MpTcpOptionAdress::MpTcpOptionAdress(uint8_t addrID, ns3::Ipv4Address m_addr): m_addr{m_addr}, m_addrId{addrID}
+{
+}
+
+MpTcpOptionAdress::~MpTcpOptionAdress()
+{
+}
+
+TypeId
+MpTcpOptionAdress::GetTypeId()
+{
+    static TypeId tid = TypeId("ns3::MpTcpOptionAdress")
+                            .SetParent<TcpOption>()
+                            .SetGroupName("Internet")
+                            .AddConstructor<MpTcpOptionAdress>();
+    return tid;
+}
+
+TypeId
+MpTcpOptionAdress::GetInstanceTypeId() const
+{
+    return GetTypeId();
+}
+
+void
+MpTcpOptionAdress::Print(std::ostream& os) const
+{
+    os << "MpTcpOptionAdress addrID" << m_addrId << " addr " << m_addr;
+}
+
+void
+MpTcpOptionAdress::Serialize(Buffer::Iterator start) const
+{
+    start.WriteU8(m_addrId);
+    start.WriteHtonU32(m_addr.Get());
+}
+
+uint32_t
+MpTcpOptionAdress::Deserialize(Buffer::Iterator start)
+{
+    m_addrId = start.ReadU8();
+    m_addr = Ipv4Address(start.ReadNtohU32());
+    return GetSerializedSize();
+}
+
+uint8_t
+MpTcpOptionAdress::GetKind() const
+{
+    return TcpOption::Kind::MP_ADDR;
+}
+
+uint32_t
+MpTcpOptionAdress::GetSerializedSize() const
 {
     return 5;
 }
