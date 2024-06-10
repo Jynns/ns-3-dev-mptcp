@@ -68,6 +68,15 @@ MpTcpOptionMultiPathCabable::MpTcpOptionMultiPathCabable()
     m_senderToken = 0;
 }
 
+MpTcpOptionMultiPathCabable::MpTcpOptionMultiPathCabable(uint32_t token): m_senderToken{token}
+{
+    m_senderToken = 0;
+}
+
+MpTcpOptionMultiPathCabable::~MpTcpOptionMultiPathCabable()
+{
+}
+
 TypeId
 MpTcpOptionMultiPathCabable::GetTypeId()
 {
@@ -269,7 +278,7 @@ MpTcpOptionDataSeqMapping::GetInstanceTypeId() const
 void
 MpTcpOptionDataSeqMapping::Print(std::ostream& os) const
 {
-    os << "MpTcpOptionDataSeqMapping "  
+    os << "MpTcpOptionDataSeqMapping ";
 }
 
 void

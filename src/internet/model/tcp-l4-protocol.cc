@@ -36,6 +36,7 @@
 #include "tcp-recovery-ops.h"
 #include "tcp-socket-base.h"
 #include "tcp-socket-factory-impl.h"
+#include "mp-tcp-option.h"
 
 #include "ns3/assert.h"
 #include "ns3/boolean.h"
@@ -400,39 +401,7 @@ TcpL4Protocol::PacketReceived(Ptr<Packet> packet,
 
     packet->PeekHeader(incomingTcpHeader);
 
-    // MPTCP related modification----------------------------
-    // Extract MPTCP options if there is any
-    //vector<TcpOptions*> options = incomingTcpHeader.GetOptions();
-    /*auto l = incomingTcpHeader.GetOption();
-
-    uint8_t flags = tcpHeader.GetFlags();
-    bool hasSyn = flags & TcpHeader::SYN;
-    TcpOptions* opt;
-    uint32_t Token;
-    for (uint32_t j = 0; j < options.size(); j++)
-    {
-        opt = options[j];
-        if ((opt->optName == OPT_MPC) && hasSyn)
-        { // In this case the endpoint with destination port and token value of zero need to be
-          // find.
-            NS_LOG_INFO("TcpL4Protocol::Receive -> OPT_MPC -> Do NOTTING");
-        }
-        else if ((opt->optName == OPT_JOIN) && hasSyn)
-        { // In this case there should be endPoint with this token, so look for a match on all
-          // endpoints.
-            Token = ((OptJoinConnection*)opt)->receiverToken;
-            TokenMaps::iterator it;
-            it = m_TokenMap.find(Token);
-            if (it != m_TokenMap.end())
-            {
-                NS_LOG_INFO("TcpL4Protocol::Receive -> OPT_JOIN -> Token "
-                            << Token << " has find forwardup to it");
-                ((*it).second)->ForwardUp(packet, ipHeader, srcPort, incomingInterface);
-                return IpL4Protocol::RX_OK;
-            }
-        }
-    } OUT TODO */ 
-    //---------------------------------------------------------
+    
 
     NS_LOG_LOGIC("TcpL4Protocol " << this << " receiving seq "
                                   << incomingTcpHeader.GetSequenceNumber() << " ack "
@@ -505,6 +474,38 @@ TcpL4Protocol::Receive(Ptr<Packet> packet,
     {
         return checksumControl;
     }
+
+    // MPTCP related modification----------------------------
+    // Extract MPTCP options if there is any
+    //packetreceived extracted header and saved it in incoming tcpheader
+
+    uint8_t flags = incomingTcpHeader.GetFlags();
+    bool hasSyn = flags & TcpHeader::SYN;
+    uint32_t Token;
+
+    if(incomingTcpHeader.HasOption(TcpOption::Kind::MP_MPC) && hasSyn){
+        // In this case the endpoint with destination port and token value of zero need to be
+        // find.
+        NS_LOG_INFO("TcpL4Protocol::Receive -> OPT_MPC -> Do NOTTING");
+    }
+    else if(incomingTcpHeader.HasOption(TcpOption::Kind::MP_JOIN) && hasSyn){
+        // In this case there should be endPoint with this token, so look for a match on all
+        // endpoints.
+            Token = DynamicCast<const MpTcpOptionJoin>(incomingTcpHeader.GetOption(TcpOption::Kind::MP_JOIN))->m_senderToken;
+            TokenMaps::iterator it;
+            it = m_TokenMap.find(Token);
+            if (it != m_TokenMap.end())
+            {
+                NS_LOG_INFO("TcpL4Protocol::Receive -> OPT_JOIN -> Token "
+                            << Token << " has find forwardup to it");
+                ((*it).second)->ForwardUp(packet, incomingIpHeader, incomingTcpHeader.GetSourcePort(), incomingInterface);
+                return IpL4Protocol::RX_OK;
+            }else{
+                NS_LOG_INFO("Couldn't find "<< Token << " in local Token Map :( ");
+            }
+
+    }
+    //---------------------------------------------------------
 
     Ipv4EndPointDemux::EndPoints endPoints;
     endPoints = m_endPoints->Lookup(incomingIpHeader.GetDestination(),

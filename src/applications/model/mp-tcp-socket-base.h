@@ -30,10 +30,6 @@
 #include "ns3/mp-tcp-typedef.h"
 #include "ns3/tcp-l4-protocol.h"
 
-#define A 1
-#define B 2
-#define A_SCALE 512
-
 using namespace std;
 namespace ns3
 {
@@ -54,8 +50,10 @@ public: // public methods
   virtual int Bind();                         // Bind a socket by setting up endpoint in TcpL4Protocol
   virtual int Bind(const Address &address);   // Bind a socket ... to specific add:port; set net device befor 
   virtual int Connect(const Address &address);
-  virtual int Connect(Ipv4Address servAddr, uint16_t servPort);
-
+  virtual int Connect(Ipv4Address servAddr, uint16_t servPort);  
+  virtual int Listen(void);
+  virtual int Close(void);                    // Close by app: Kill socket upon tx buffer emptied
+  virtual int Close(uint8_t sFlowIdx);        // Closing subflow...
   void SetCongestionCtrlAlgo(CongestionCtrl_t ccalgo);
   void SetSchedulingAlgo(DataDistribAlgo_t ddalgo);
   void SetPathManager(PathManager_t pManagerMode);
@@ -111,6 +109,7 @@ protected:
   //void SendRST(uint8_t sFlowIdx);
   //virtual int SendDataPacket (uint8_t sFlowIdx, uint32_t pktSize, bool withAck);
   virtual bool IsThereRoute(Ipv4Address src, Ipv4Address dst);
+  Ptr<NetDevice> FindOutputNetDevice(Ipv4Address); 
 
   //connection and closing operations
   void CloseAndNotify(uint8_t sFlowIdx);
@@ -120,6 +119,10 @@ protected:
   void CancelAllSubflowTimers(void);
   void CancelAllTimers(uint8_t sFlowIdx);
   //void CancelAllTimers(uint8_t sFlowIdx);
+
+// Re-ordering buffer
+  bool FindPacketFromUnOrdered(uint8_t sFlowIdx);
+
 
 //helper function 
   string TcpFlagPrinter(uint8_t);

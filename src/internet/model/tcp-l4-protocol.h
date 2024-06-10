@@ -85,8 +85,10 @@ class TcpL4Protocol : public IpL4Protocol
      * \return the object TypeId
      */
     static TypeId GetTypeId();
-    static const uint8_t PROT_NUMBER; //!< protocol number (0x6)
+    static const uint8_t PROT_NUMBER;                    //!< protocol number (0x6)
     typedef std::map<uint32_t, Ipv4EndPoint*> TokenMaps; // MPTCP related modification
+    std::map<uint32_t, Ipv4EndPoint*> m_TokenMap;    //!< list of Token
+
 
     TcpL4Protocol();
     ~TcpL4Protocol() override;
@@ -347,7 +349,7 @@ class TcpL4Protocol : public IpL4Protocol
     uint64_t m_socketIndex{0}; //!< index of the next socket to be created
     IpL4Protocol::DownTargetCallback m_downTarget;   //!< Callback to send packets over IPv4
     IpL4Protocol::DownTargetCallback6 m_downTarget6; //!< Callback to send packets over IPv6
-
+    
     /**
      * \brief Send a packet via TCP (IPv4)
      *

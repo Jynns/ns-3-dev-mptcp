@@ -40,6 +40,7 @@ class MpTcpOptionMultiPathCabable : public TcpOption
 {
   public:
     MpTcpOptionMultiPathCabable();
+    MpTcpOptionMultiPathCabable(uint32_t token);
     ~MpTcpOptionMultiPathCabable() override;
 
     /**
@@ -81,7 +82,7 @@ class MpTcpOptionJoin : public TcpOption
     uint8_t GetKind() const override;
     uint32_t GetSerializedSize() const override;
 
-  private:
+  public:
     uint32_t m_senderToken;
     u_int8_t m_addrId;
 };
