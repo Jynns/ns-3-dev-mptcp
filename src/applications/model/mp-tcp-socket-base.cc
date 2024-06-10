@@ -486,6 +486,15 @@ MpTcpSocketBase::SetPathManager(PathManager_t pManagerMode)
 {
     m_pathManager = pManagerMode;
 }
+void
+MpTcpSocketBase::SendRST(uint8_t sFlowIdx)
+{
+  NS_LOG_FUNCTION (this << (int) sFlowIdx); //
+  //cout << Simulator::Now().GetSeconds() << " [" << m_node->GetId() << "]{"<< flowId <<"} SendRST -> " << this << " ("<< (int) sFlowIdx << ")"<< endl;
+  SendEmptyPacket(sFlowIdx, TcpHeader::RST);
+  NotifyErrorClose();
+  DeallocateEndPoint(sFlowIdx);
+}
 
 void
 MpTcpSocketBase::SendEmptyPacket(uint8_t sFlowIdx, uint8_t flags)

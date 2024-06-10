@@ -106,12 +106,13 @@ protected:
   //virtual void DoForwardUp(Ptr<Packet> p, Ipv4Header header, uint16_t port, Ptr<Ipv4Interface> interface);
   //virtual bool SendPendingData(uint8_t sFlowId = -1);
   virtual void SendEmptyPacket(uint8_t sFlowId, uint8_t flags);
-  //void SendRST(uint8_t sFlowIdx);
+  void SendRST(uint8_t sFlowIdx);
   //virtual int SendDataPacket (uint8_t sFlowIdx, uint32_t pktSize, bool withAck);
   virtual bool IsThereRoute(Ipv4Address src, Ipv4Address dst);
   Ptr<NetDevice> FindOutputNetDevice(Ipv4Address); 
 
   //connection and closing operations
+  virtual int DoClose(uint8_t sFlowIdx);
   void CloseAndNotify(uint8_t sFlowIdx);
   void CloseAndNotifyAllSubflows();
   void DeallocateEndPoint(uint8_t sFlowIdx);
