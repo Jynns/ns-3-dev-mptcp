@@ -46,6 +46,7 @@
 #include "ns3/object-map.h"
 #include "ns3/packet.h"
 #include "ns3/simulator.h"
+#include "ns3/mp-tcp-socket-base.h"
 
 #include <iomanip>
 #include <sstream>
@@ -199,23 +200,34 @@ TcpL4Protocol::CreateSocket(TypeId congestionTypeId)
 Ptr<Socket>
 TcpL4Protocol::CreateSocket(TypeId congestionTypeId, TypeId recoveryTypeId)
 {
-    NS_LOG_FUNCTION(this << congestionTypeId.GetName());
-    ObjectFactory rttFactory;
-    ObjectFactory congestionAlgorithmFactory;
-    ObjectFactory recoveryAlgorithmFactory;
-    rttFactory.SetTypeId(m_rttTypeId);
-    congestionAlgorithmFactory.SetTypeId(congestionTypeId);
-    recoveryAlgorithmFactory.SetTypeId(recoveryTypeId);
 
-    Ptr<RttEstimator> rtt = rttFactory.Create<RttEstimator>();
-    Ptr<TcpSocketBase> socket = CreateObject<TcpSocketBase>();
-    Ptr<TcpCongestionOps> algo = congestionAlgorithmFactory.Create<TcpCongestionOps>();
+    Ptr<TcpSocketBase> socket;
+    NS_LOG_FUNCTION(this << congestionTypeId.GetName());
+    if(congestionTypeId == TypeId::LookupByName("ns3::MpTcpSocketBase")){
+        socket = CreateObject<MpTcpSocketBase>();
+    }else{
+        socket = CreateObject<TcpSocketBase>();
+        
+        ObjectFactory congestionAlgorithmFactory;
+        
+        congestionAlgorithmFactory.SetTypeId(congestionTypeId);
+        
+        Ptr<TcpCongestionOps> algo = congestionAlgorithmFactory.Create<TcpCongestionOps>();
+
+        socket->SetCongestionControlAlgorithm(algo);
+    }
+    ObjectFactory rttFactory;
+    ObjectFactory recoveryAlgorithmFactory;
+
+    recoveryAlgorithmFactory.SetTypeId(recoveryTypeId);
+    rttFactory.SetTypeId(m_rttTypeId);
+
     Ptr<TcpRecoveryOps> recovery = recoveryAlgorithmFactory.Create<TcpRecoveryOps>();
+    Ptr<RttEstimator> rtt = rttFactory.Create<RttEstimator>();
 
     socket->SetNode(m_node);
     socket->SetTcp(this);
     socket->SetRtt(rtt);
-    socket->SetCongestionControlAlgorithm(algo);
     socket->SetRecoveryAlgorithm(recovery);
 
     m_sockets[m_socketIndex++] = socket;
