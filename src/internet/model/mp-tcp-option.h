@@ -57,7 +57,7 @@ class MpTcpOptionMultiPathCabable : public TcpOption
     uint8_t GetKind() const override;
     uint32_t GetSerializedSize() const override;
 
-  private:
+  public:
     uint32_t m_senderToken;
 };
 

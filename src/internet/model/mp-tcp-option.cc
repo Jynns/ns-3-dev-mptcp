@@ -70,7 +70,6 @@ MpTcpOptionMultiPathCabable::MpTcpOptionMultiPathCabable()
 
 MpTcpOptionMultiPathCabable::MpTcpOptionMultiPathCabable(uint32_t token): m_senderToken{token}
 {
-    m_senderToken = 0;
 }
 
 MpTcpOptionMultiPathCabable::~MpTcpOptionMultiPathCabable()
@@ -102,12 +101,15 @@ MpTcpOptionMultiPathCabable::Print(std::ostream& os) const
 void
 MpTcpOptionMultiPathCabable::Serialize(Buffer::Iterator start) const
 {
+    start.WriteU8(GetKind());
     start.WriteHtonU32(m_senderToken);
 }
 
 uint32_t
 MpTcpOptionMultiPathCabable::Deserialize(Buffer::Iterator start)
 {
+    uint8_t kind = start.ReadU8();
+    std::cout << kind;
     m_senderToken = start.ReadNtohU32();
     return GetSerializedSize();
 }
@@ -121,7 +123,7 @@ MpTcpOptionMultiPathCabable::GetKind() const
 uint32_t
 MpTcpOptionMultiPathCabable::GetSerializedSize() const
 {
-    return 4;
+    return 5;
 }
 
 MpTcpOptionJoin::MpTcpOptionJoin()

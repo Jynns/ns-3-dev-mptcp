@@ -622,6 +622,7 @@ MpTcpSocketBase::SendEmptyPacket(uint8_t sFlowIdx, uint8_t flags)
     header.SetPaddingLength(plen);*/
 
     NS_LOG_INFO("sending packet from " << sFlow->sAddr << " to "<< sFlow->dAddr );
+
     m_tcp->SendPacket(p, header, sFlow->sAddr, sFlow->dAddr, FindOutputNetDevice(sFlow->sAddr));
     // sFlow->rtt->SentSeq (sFlow->TxSeqNumber, 1);            // notify the RTT
 
