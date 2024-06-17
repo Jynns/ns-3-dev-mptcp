@@ -108,7 +108,7 @@ class MpTcpOptionAdress : public TcpOption
     uint8_t GetKind() const override;
     uint32_t GetSerializedSize() const override;
 
-  private:
+  public:
     ns3::Ipv4Address m_addr;
     uint8_t m_addrId;
 };

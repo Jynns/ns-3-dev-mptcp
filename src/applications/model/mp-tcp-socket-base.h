@@ -101,13 +101,20 @@ public: // public methods
 
 protected:
 //protected methods
+  //MPTCP connection and subflow setup
+  int  SetupCallback(void);  // Setup SetRxCallback & SetRxCallback call back for a host
+  void AdvertiseAvailableAddresses(); // Advertise all addresses to the peer, including the already established address.
+  void CompleteFork(Ptr<Packet> p, const TcpHeader& h, const Address& fromAddress, const Address& toAddress);
+  bool InitiateSubflows();            // Initiate new subflows when FullMesh mode is active
+  
+
   // Transfer operations
-  //void ForwardUp(Ptr<Packet> p, Ipv4Header header, uint16_t port, Ptr<Ipv4Interface> interface);
-  //virtual void DoForwardUp(Ptr<Packet> p, Ipv4Header header, uint16_t port, Ptr<Ipv4Interface> interface);
-  //virtual bool SendPendingData(uint8_t sFlowId = -1);
+  void ForwardUp(Ptr<Packet> p, Ipv4Header header, uint16_t port, Ptr<Ipv4Interface> interface);
+  virtual void DoForwardUp(Ptr<Packet> p, Ipv4Header header, uint16_t port, Ptr<Ipv4Interface> interface);
+  virtual bool SendPendingData(uint8_t sFlowId = -1);
   virtual void SendEmptyPacket(uint8_t sFlowId, uint8_t flags);
   void SendRST(uint8_t sFlowIdx);
-  //virtual int SendDataPacket (uint8_t sFlowIdx, uint32_t pktSize, bool withAck);
+  virtual int SendDataPacket (uint8_t sFlowIdx, uint32_t pktSize, bool withAck);
   virtual bool IsThereRoute(Ipv4Address src, Ipv4Address dst);
   Ptr<NetDevice> FindOutputNetDevice(Ipv4Address); 
 
@@ -121,11 +128,78 @@ protected:
   void CancelAllTimers(uint8_t sFlowIdx);
   //void CancelAllTimers(uint8_t sFlowIdx);
 
+//state transition functions
+  void ProcessListen  (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&, const Address&, const Address&);
+  void ProcessListen  (Ptr<Packet> p, const TcpHeader&, const Address&, const Address&);
+  void ProcessEstablished (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&);
+  void ProcessListen  (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&, const Address&, const Address&);
+  void ProcessListen  (Ptr<Packet>, const TcpHeader&, const Address&, const Address&);
+  virtual void ProcessSynSent (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&);
+  void ProcessSynRcvd (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&, const Address&, const Address&);
+  void ProcessWait    (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&);
+  void ProcessClosing (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&);
+  void ProcessLastAck (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&);
+  uint8_t ProcessOption(TcpOptions *opt);
+
+  // Window Management
+  //virtual uint32_t BytesInFlight(uint8_t sFlowIdx);  // Return total bytes in flight of a subflow
+  uint16_t AdvertisedWindowSize();
+  uint32_t AvailableWindow(uint8_t sFlowIdx);
+  
+
+//Managing Data Tx/Rx
+  virtual bool ReadOptions (uint8_t sFlowIdx, Ptr<Packet> pkt, const TcpHeader&); // Read option from incoming packets
+  virtual bool ReadOptions (Ptr<Packet> pkt, const TcpHeader&); // Read option from incoming packets (Listening Socket only)
+  virtual void EstimateRtt (uint8_t sFlowIdx, const TcpHeader&);
+  virtual void EstimateRtt (const TcpHeader&);
+    // Manage data Tx/Rx
+  //virtual Ptr<TcpSocketBase> Fork(void);
+  virtual void ReceivedAck (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&); // Received an ACK packet
+  //virtual void ReceivedData (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&); // Recv of a data, put into buffer, call L7 to get it if necessary
+  virtual void DupAck(const TcpHeader& t, uint32_t count);  // Not in operation, it's pure virtual function from TcpSocketBase
+  virtual void DupAck(uint8_t sFlowIdx, DSNMapping * ptrDSN);       // Congestion control algorithms -> loss recovery
+  //virtual void NewACK(uint8_t sFlowIdx, const TcpHeader&, TcpOptions* opt);
+  //void NewAckNewReno(uint8_t sFlowIdx, const TcpHeader&, TcpOptions* opt);
+  // virtual void DoRetransmit (uint8_t sFlowIdx);
+  virtual void DoRetransmit (uint8_t sFlowIdx, DSNMapping* ptrDSN);
+  void SetReTxTimeout(uint8_t sFlowIdx);
+  //void ReTxTimeout(uint8_t sFlowIdx);
+  //virtual void Retransmit(uint8_t sFlowIdx);
+  //void LastAckTimeout(uint8_t sFlowIdx);
+  //void DiscardUpTo(uint8_t sFlowIdx, uint32_t ack);
+
 // Re-ordering buffer
   bool FindPacketFromUnOrdered(uint8_t sFlowIdx);
 
+// Congestion control
+  // virtual void OpenCWND(uint8_t sFlowIdx, uint32_t ackedBytes);
+  void ReduceCWND(uint8_t sFlowIdx, DSNMapping* ptrDSN);
+  // virtual void calculateAlpha();
+  virtual void calculateTotalCWND();
+  // uint32_t compute_total_window();
+  // uint32_t compute_a_scaled();
+  // double compute_alfa();
+  // void window_changed();
+
 
 //helper function 
+  // Helper functions -> main operations
+  //uint8_t LookupByAddrs(Ipv4Address src, Ipv4Address dst); // Called by Forwardup() to find the right subflow for incoing packet
+  virtual int LookupSubflow(Ipv4Address src, uint32_t srcPort, Ipv4Address dst, uint32_t dstPort); // LookupBy4-Tuple
+
+  virtual uint8_t getSubflowToUse();  // Called by SendPendingData() to get a subflow based on round robin algorithm
+  //bool IsThereRoute(Ipv4Address src, Ipv4Address dst);     // Called by InitiateSubflow & LookupByAddrs and Connect to check whether there is route between a pair of addresses.
+  //bool IsLocalAddress(Ipv4Address addr);
+  //bool IsRemoteAddress(Ipv4Address addr);
+  //Ptr<NetDevice> FindOutputNetDevice(Ipv4Address);         // Find Netdevice object of specific IP address.
+  //DSNMapping* getAckedSegment(uint8_t sFlowIdx, uint32_t ack);
+  //DSNMapping* getSegmentOfACK(uint8_t sFlowIdx, uint32_t ack);
+  //void SendAccumulativeAck(uint8_t sFlowIdx);
+  // Helper functions -> evaluation and debugging
+  //void PrintIpv4AddressFromIpv4Interface(Ptr<Ipv4Interface>, int32_t);
+  //std::string PrintCC(uint32_t cc);
+  //void getQueuePkt(Ipv4Address addr);
+
   string TcpFlagPrinter(uint8_t);
 
 //protected variables 
