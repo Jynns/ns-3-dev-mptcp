@@ -57,6 +57,7 @@ public: // public methods
   void SetCongestionCtrlAlgo(CongestionCtrl_t ccalgo);
   void SetSchedulingAlgo(DataDistribAlgo_t ddalgo);
   void SetPathManager(PathManager_t pManagerMode);
+  bool SendAllSubflowsFIN(void);
 
   // public variables
   // Evaluation & plotting parameters and containers
@@ -106,6 +107,8 @@ protected:
   void AdvertiseAvailableAddresses(); // Advertise all addresses to the peer, including the already established address.
   void CompleteFork(Ptr<Packet> p, const TcpHeader& h, const Address& fromAddress, const Address& toAddress);
   bool InitiateSubflows();            // Initiate new subflows when FullMesh mode is active
+  bool InitiateSingleSubflows(uint16_t); // Initiate new subflows when nDiffPorts is active
+  virtual void InitiateMultipleSubflows();
   
 
   // Transfer operations
@@ -126,23 +129,24 @@ protected:
   bool CloseMultipathConnection();      // Close MPTCP connection is possible
   void CancelAllSubflowTimers(void);
   void CancelAllTimers(uint8_t sFlowIdx);
+  void PeerClose(uint8_t sFlow, Ptr<Packet> p, const TcpHeader& tcpHeader);
+  void DoPeerClose(uint8_t sFlowIdx);
   //void CancelAllTimers(uint8_t sFlowIdx);
+  void TimeWait(uint8_t sFlowIdx);
 
 //state transition functions
   void ProcessListen  (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&, const Address&, const Address&);
   void ProcessListen  (Ptr<Packet> p, const TcpHeader&, const Address&, const Address&);
   void ProcessEstablished (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&);
-  void ProcessListen  (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&, const Address&, const Address&);
-  void ProcessListen  (Ptr<Packet>, const TcpHeader&, const Address&, const Address&);
   virtual void ProcessSynSent (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&);
   void ProcessSynRcvd (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&, const Address&, const Address&);
   void ProcessWait    (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&);
-  void ProcessClosing (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&);
+  //void ProcessClosing (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&);
   void ProcessLastAck (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&);
-  uint8_t ProcessOption(TcpOptions *opt);
+  //uint8_t ProcessOption(Ptr<TcpOption> opt);
 
   // Window Management
-  //virtual uint32_t BytesInFlight(uint8_t sFlowIdx);  // Return total bytes in flight of a subflow
+  virtual uint32_t BytesInFlight(uint8_t sFlowIdx);  // Return total bytes in flight of a subflow
   uint16_t AdvertisedWindowSize();
   uint32_t AvailableWindow(uint8_t sFlowIdx);
   
@@ -155,34 +159,38 @@ protected:
     // Manage data Tx/Rx
   //virtual Ptr<TcpSocketBase> Fork(void);
   virtual void ReceivedAck (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&); // Received an ACK packet
-  //virtual void ReceivedData (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&); // Recv of a data, put into buffer, call L7 to get it if necessary
+  virtual void ReceivedData (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&); // Recv of a data, put into buffer, call L7 to get it if necessary
   virtual void DupAck(const TcpHeader& t, uint32_t count);  // Not in operation, it's pure virtual function from TcpSocketBase
   virtual void DupAck(uint8_t sFlowIdx, DSNMapping * ptrDSN);       // Congestion control algorithms -> loss recovery
-  //virtual void NewACK(uint8_t sFlowIdx, const TcpHeader&, TcpOptions* opt);
-  //void NewAckNewReno(uint8_t sFlowIdx, const TcpHeader&, TcpOptions* opt);
-  // virtual void DoRetransmit (uint8_t sFlowIdx);
+  virtual void NewACK(uint8_t sFlowIdx, const TcpHeader&, Ptr<TcpOption> opt);
+  void NewAckNewReno(uint8_t sFlowIdx, const TcpHeader&, Ptr<TcpOption> opt);
+  virtual void DoRetransmit (uint8_t sFlowIdx);
   virtual void DoRetransmit (uint8_t sFlowIdx, DSNMapping* ptrDSN);
   void SetReTxTimeout(uint8_t sFlowIdx);
-  //void ReTxTimeout(uint8_t sFlowIdx);
-  //virtual void Retransmit(uint8_t sFlowIdx);
-  //void LastAckTimeout(uint8_t sFlowIdx);
-  //void DiscardUpTo(uint8_t sFlowIdx, uint32_t ack);
+  void ReTxTimeout(uint8_t sFlowIdx);
+  virtual void Retransmit(uint8_t sFlowIdx);
+  void LastAckTimeout(uint8_t sFlowIdx);
+  void DiscardUpTo(uint8_t sFlowIdx, uint32_t ack);
 
 // Re-ordering buffer
   bool FindPacketFromUnOrdered(uint8_t sFlowIdx);
+  bool StoreUnOrderedData(DSNMapping *ptr);
+  void ReadUnOrderedData();
 
 // Congestion control
-  // virtual void OpenCWND(uint8_t sFlowIdx, uint32_t ackedBytes);
+  virtual void OpenCWND(uint8_t sFlowIdx, uint32_t ackedBytes);
   void ReduceCWND(uint8_t sFlowIdx, DSNMapping* ptrDSN);
-  // virtual void calculateAlpha();
+  virtual void calculateAlpha();
   virtual void calculateTotalCWND();
-  // uint32_t compute_total_window();
-  // uint32_t compute_a_scaled();
-  // double compute_alfa();
-  // void window_changed();
+  uint32_t compute_total_window();
+  uint32_t compute_a_scaled();
+  double compute_alfa();
+  void window_changed();
 
 
 //helper function 
+
+  void IsLastAck();
   // Helper functions -> main operations
   //uint8_t LookupByAddrs(Ipv4Address src, Ipv4Address dst); // Called by Forwardup() to find the right subflow for incoing packet
   virtual int LookupSubflow(Ipv4Address src, uint32_t srcPort, Ipv4Address dst, uint32_t dstPort); // LookupBy4-Tuple
@@ -193,7 +201,7 @@ protected:
   //bool IsRemoteAddress(Ipv4Address addr);
   //Ptr<NetDevice> FindOutputNetDevice(Ipv4Address);         // Find Netdevice object of specific IP address.
   //DSNMapping* getAckedSegment(uint8_t sFlowIdx, uint32_t ack);
-  //DSNMapping* getSegmentOfACK(uint8_t sFlowIdx, uint32_t ack);
+  DSNMapping* getSegmentOfACK(uint8_t sFlowIdx, uint32_t ack);
   //void SendAccumulativeAck(uint8_t sFlowIdx);
   // Helper functions -> evaluation and debugging
   //void PrintIpv4AddressFromIpv4Interface(Ptr<Ipv4Interface>, int32_t);
@@ -205,6 +213,14 @@ protected:
 //protected variables 
   // TODO is this really necessary?
   friend class Tcp;
+
+   // Uniform Random Variable
+  // uint16_t GetRandom16();
+  // uint32_t GetRandom32();
+  // uint32_t GetRandom(uint32_t, uint32_t);
+  double drand();
+  // uint32_t GetEstSubflows();
+
 
   CongestionCtrl_t m_algocc; 
   DataDistribAlgo_t m_scheduler;
@@ -242,6 +258,7 @@ protected:
   double alpha;
   uint32_t a;
   double _e;
+
 
   uint32_t totalCwnd;
   CongestionCtrl_t AlgoCC;       // Algorithm for Congestion Control

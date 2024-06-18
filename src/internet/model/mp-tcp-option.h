@@ -134,7 +134,7 @@ class MpTcpOptionDataSeqMapping : public TcpOption
     uint8_t GetKind() const override;
     uint32_t GetSerializedSize() const override;
 
-  private:
+  public:
     uint64_t m_dSeqNum; 
     uint16_t m_dLevelLength; 
     uint32_t m_sfSeqNum;
