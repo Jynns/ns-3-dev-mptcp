@@ -50,9 +50,54 @@ ReceivePacket(Ptr<Socket> socket)
 }
 
 void
-handler(Ptr<MpTcpSocketBase> m, InetSocketAddress rem)
+handlerConnect(Ptr<MpTcpSocketBase> m, InetSocketAddress rem)
 {
-    m->Connect(rem);
+    int connectionResult = m->Connect(rem);
+    if (connectionResult == 0)
+    {
+        NS_LOG_UNCOND("Connection sucessful start sending Data");
+    }
+}
+
+void
+handlerSend(Ptr<MpTcpSocketBase> m_socket)
+{
+    //TODO move this to function
+    uint32_t m_totBytes = 0;
+    uint32_t m_maxBytes = 1000000;
+    uint32_t m_sendSize = 140000;
+
+    NS_LOG_DEBUG("m_totBytes: " << m_totBytes << " maxByte: " << m_maxBytes << " GetTxAvailable: "
+                                << m_socket->GetTxAvailable() << " SendSize: " << m_sendSize);
+
+    // while (m_totBytes < m_maxBytes && m_socket->GetTxAvailable())
+
+    while ((m_maxBytes == 0 && m_socket->GetTxAvailable()) ||
+           (m_totBytes < m_maxBytes && m_socket->GetTxAvailable()))
+    { // Time to send more new data into MPTCP socket buffer
+        uint32_t toSend = m_sendSize;
+        if (m_maxBytes > 0)
+        {
+            uint32_t tmp = std::min(m_sendSize, m_maxBytes - m_totBytes);
+            toSend = std::min(tmp, m_socket->GetTxAvailable());
+        }
+        else
+        {
+            toSend = std::min(m_sendSize, m_socket->GetTxAvailable());
+        }
+        // toSend = std::min(toSend, m_bufferSize);
+        // int actual = m_socket->FillBuffer(&m_data[toSend], toSend); // TODO Change m_totalBytes
+        // to toSend
+        int actual = m_socket->FillBuffer(toSend); // TODO Change m_totalBytes to toSend
+        m_totBytes += actual;
+        NS_LOG_DEBUG("toSend: " << toSend << " actual: " << actual << " totalByte: " << m_totBytes);
+        m_socket->SendBufferedData();
+    }
+    if (m_totBytes == m_maxBytes) // && m_connected)
+    {
+        m_socket->Close();
+       // m_connected = false;
+    }
 }
 
 int
@@ -97,7 +142,7 @@ main(int argc, char* argv[])
         mp1->BindToNetDevice(devices.Get(0));
         mp2->BindToNetDevice(devices.Get(1));
 
-        //mp1->Bind();
+        // mp1->Bind();
         mp2->Bind();
         mp1->SetRecvCallback(MakeCallback(&ReceivePacket));
         ns3::Address f = mp1->GetBoundNetDevice()->GetAddress();
@@ -118,11 +163,14 @@ main(int argc, char* argv[])
         it = buffer.Begin();
         destination.Deserialize(it);
         bool af = destination.HasOption(TcpOption::Kind::MP_MPC);
-        uint32_t ak = DynamicCast<const MpTcpOptionMultiPathCabable>(destination.GetOption(TcpOption::Kind::MP_MPC))->m_senderToken;
+        uint32_t ak = DynamicCast<const MpTcpOptionMultiPathCabable>(
+                          destination.GetOption(TcpOption::Kind::MP_MPC))
+                          ->m_senderToken;
         std::cout << ak << af;
 
         mp1->Listen();
-        Simulator::Schedule(Seconds(2), &handler, mp2, remote);
+        Simulator::Schedule(Seconds(2), &handlerConnect, mp2, remote);
+        Simulator::Schedule(Seconds(2.5), &handlerSend, mp2);
 
         NS_LOG_INFO("Run Simulation.");
         Simulator::Stop(Seconds(10.0));

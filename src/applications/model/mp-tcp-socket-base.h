@@ -58,6 +58,9 @@ public: // public methods
   void SetSchedulingAlgo(DataDistribAlgo_t ddalgo);
   void SetPathManager(PathManager_t pManagerMode);
   bool SendAllSubflowsFIN(void);
+  int FillBuffer(uint32_t size);
+  bool SendBufferedData();                    // This would called SendPendingData() - TcpTxBuffer API need to be used in future!
+  uint32_t GetTxAvailable();                  // Return available space in sending buffer to application
 
   // public variables
   // Evaluation & plotting parameters and containers

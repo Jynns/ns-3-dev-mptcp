@@ -731,6 +731,29 @@ MpTcpSocketBase::SendAllSubflowsFIN(void)
     }
   return true;
 }
+
+bool
+MpTcpSocketBase::SendBufferedData()
+{
+
+    return SendPendingData();
+}
+
+uint32_t
+MpTcpSocketBase::GetTxAvailable()
+{
+  NS_LOG_FUNCTION_NOARGS();
+  return sendingBuffer.FreeSpaceSize();
+}
+
+int
+MpTcpSocketBase::FillBuffer(uint32_t size)
+{
+  NS_LOG_FUNCTION( this << size );
+  return sendingBuffer.Add(size);
+}
+
+
 void
 MpTcpSocketBase::ForwardUp(Ptr<Packet> p,
                            Ipv4Header header,
