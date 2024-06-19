@@ -653,7 +653,7 @@ MpTcpSocketBase::SendDataPacket(uint8_t sFlowIdx, uint32_t size, bool withAck)
                  << " dSize: " << packetSize << " sFlow: " << sFlow->routeId);
 
     // Do some updates.....
-    sFlow->rtt->SentSeq(SequenceNumber32(sFlow->TxSeqNumber),
+    sFlow->SentSeq(SequenceNumber32(sFlow->TxSeqNumber),
                         packetSize);  // Notify the RTT of a data packet sent
     sFlow->TxSeqNumber += packetSize; // Update subflow's nextSeqNum to send.
     sFlow->maxSeqNb = std::max(sFlow->maxSeqNb, sFlow->TxSeqNumber - 1);
@@ -1158,7 +1158,7 @@ MpTcpSocketBase::SendEmptyPacket(uint8_t sFlowIdx, uint8_t flags)
     NS_LOG_INFO("sending packet from " << sFlow->sAddr << " to " << sFlow->dAddr);
 
     m_tcp->SendPacket(p, header, sFlow->sAddr, sFlow->dAddr, FindOutputNetDevice(sFlow->sAddr));
-    // sFlow->rtt->SentSeq (sFlow->TxSeqNumber, 1);            // notify the RTT
+    // sFlow->SentSeq (sFlow->TxSeqNumber, 1);            // notify the RTT
 
     if (sFlow->retxEvent.IsExpired() && (hasFin || hasSyn) && !isAck)
     { // Retransmit SYN / SYN+ACK / FIN / FIN+ACK to guard against lost
@@ -2021,7 +2021,7 @@ MpTcpSocketBase::ProcessSynSent(uint8_t sFlowIdx, Ptr<Packet> packet, const TcpH
         if ((m_largePlotting && (flowType.compare("Large") == 0)) ||
             (m_shortPlotting && (flowType.compare("Short") == 0)))
             sFlow->StartTracing("cWindow");
-        sFlow->rtt->Init(mptcpHeader.GetAckNumber());
+        // sFlow->rtt->Init(mptcpHeader.GetAckNumber()); not needed since subflow handles these rtt functions
         sFlow->initialSequnceNumber = (mptcpHeader.GetAckNumber().GetValue());
         NS_LOG_INFO("(" << sFlow->routeId << ") InitialSeqNb of data packet should be --->>> "
                         << sFlow->initialSequnceNumber << " Cwnd: " << sFlow->cwnd);
@@ -2032,7 +2032,7 @@ MpTcpSocketBase::ProcessSynSent(uint8_t sFlowIdx, Ptr<Packet> packet, const TcpH
 
         Time estimate;
         estimate = Seconds(1.5);
-        sFlow->rtt->SetCurrentEstimate(estimate);
+        sFlow->rtt->Measurement(estimate);
         // TODO this will be fixed
 
         SendEmptyPacket(sFlowIdx, TcpHeader::ACK);
@@ -2415,9 +2415,9 @@ MpTcpSocketBase::EstimateRtt(uint8_t sFlowIdx, const TcpHeader& mptcpHeader)
 {
     NS_LOG_FUNCTION(this << (int)sFlowIdx);
     Ptr<MpTcpSubFlow> sFlow = subflows[sFlowIdx];
-    sFlow->lastMeasuredRtt = sFlow->rtt->AckSeq(mptcpHeader.GetAckNumber());
+    sFlow->lastMeasuredRtt = sFlow->AckSeq(mptcpHeader.GetAckNumber());
     // sFlow->measuredRTT.insert(sFlow->measuredRTT.end(),
-    // sFlow->rtt->GetCurrentEstimate().GetSeconds());
+    // sFlow->rtt->GetEstimate().GetSeconds());
 }
 
 void
@@ -2883,7 +2883,7 @@ MpTcpSocketBase::DoRetransmit(uint8_t sFlowIdx)
   //TxBytes += ptrDSN->dataLevelLength + 62;
 
   // Update Rtt
-  sFlow->rtt->SentSeq(SequenceNumber32(ptrDSN->subflowSeqNumber), ptrDSN->dataLevelLength);
+  sFlow->SentSeq(SequenceNumber32(ptrDSN->subflowSeqNumber), ptrDSN->dataLevelLength);
 
   // In case of RTO, advance m_nextTxSequence
   sFlow->TxSeqNumber = std::max(sFlow->TxSeqNumber, ptrDSN->subflowSeqNumber + ptrDSN->dataLevelLength);
@@ -3046,7 +3046,7 @@ MpTcpSocketBase::compute_a_scaled()
   for (uint32_t i = 0; i < subflows.size(); i++)
     {
       Ptr<MpTcpSubFlow> sFlow = subflows[i];
-      Time time = sFlow->rtt->GetCurrentEstimate();
+      Time time = sFlow->rtt->GetEstimate();
       uint32_t rtt = time.GetMicroSeconds() / 10;
       if (rtt == 0)
         rtt = 1;
@@ -3078,7 +3078,7 @@ MpTcpSocketBase::compute_alfa()
         {
           Ptr<MpTcpSubFlow> sFlow = subflows[i];
           uint32_t cwnd = sFlow->m_inFastRec ? sFlow->ssthresh : sFlow->cwnd.Get();
-          Time time = sFlow->rtt->GetCurrentEstimate();
+          Time time = sFlow->rtt->GetEstimate();
           uint32_t rtt = time.GetMilliSeconds();
 
           if (rtt == 0)
@@ -3178,7 +3178,7 @@ MpTcpSocketBase::DoRetransmit(uint8_t sFlowIdx, DSNMapping* ptrDSN)
     // TxBytes += ptrDSN->dataLevelLength + 62;
 
     // Notify RTT
-    sFlow->rtt->SentSeq(SequenceNumber32(ptrDSN->subflowSeqNumber), ptrDSN->dataLevelLength);
+    sFlow->SentSeq(SequenceNumber32(ptrDSN->subflowSeqNumber), ptrDSN->dataLevelLength);
 
     // In case of RTO, advance m_nextTxSequence
     sFlow->TxSeqNumber =
@@ -3239,6 +3239,8 @@ MpTcpSocketBase::ReTxTimeout(uint8_t sFlowIdx)
       //NS_ASSERT(3!=3); // DANGEROUS
       return;
     }
+
+  // TODO the tcp-socket-base implementation resets the m_history of the rtt estimator here 
   Retransmit(sFlowIdx); // Retransmit the packet
 }
 
@@ -3257,7 +3259,8 @@ MpTcpSocketBase::Retransmit(uint8_t sFlowIdx)
   sFlow->TxSeqNumber = sFlow->highestAck + 1; // m_nextTxSequence = m_txBuffer.HeadSequence(); // Restart from highest Ack
   // TODO TEMP
   //if (!(sendingBuffer->Empty() && sFlow->mapDSN.size() > 0))
-  sFlow->rtt->IncreaseMultiplier();  // Double the next RTO
+  // TODO has to be moved to sublflow 
+  //sFlow->rtt->IncreaseMultiplier();  // Double the next RTO
 
   if (m_algocc >= COUPLED_EPSILON)
       window_changed();
@@ -3466,7 +3469,7 @@ MpTcpSocketBase::calculateAlpha()
     {
       Ptr<MpTcpSubFlow> sFlow = subflows[i];
 
-      Time time = sFlow->rtt->GetCurrentEstimate();
+      Time time = sFlow->rtt->GetEstimate();
       double rtt = time.GetSeconds();
       double tmpi = sFlow->cwnd.Get() / (rtt * rtt);
       if (maxi < tmpi)

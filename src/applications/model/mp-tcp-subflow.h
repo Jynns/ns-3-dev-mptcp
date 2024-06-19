@@ -39,6 +39,7 @@
 #include "ns3/ipv4-end-point.h"
 #include "ns3/ipv4-address.h"
 #include "ns3/mp-tcp-typedef.h"
+#include "ns3/tcp-socket-base.h"
 
 using namespace std;
 
@@ -58,6 +59,12 @@ public:
   void CwndTracer(uint32_t oldval, uint32_t newval);
   void SetFinSequence(const SequenceNumber32& s);
   bool Finished();
+
+  //RTTEstimator Functions
+  void SentSeq(SequenceNumber32 seq, uint32_t size); //!< Update RTTEstimator
+  Time AckSeq (SequenceNumber32 ackSeq);  //!< estimate RTTEstimator
+  void RttEstimatorReset();
+
   DSNMapping *GetunAckPkt();
 
   uint16_t routeId;           // Subflow's ID
@@ -90,6 +97,7 @@ public:
   list<DSNMapping *> mapDSN;  // List of all sent packets
   multiset<double> measuredRTT;
   Ptr<RttMeanDeviation> rtt;  // RTT calculator
+  std::deque<RttHistory> m_history; //!< List of sent packet for rtt estimating  
   Time lastMeasuredRtt;       // Last measured RTT, used for plotting
   uint32_t TxSeqNumber;       // Subflow's next expected sequence number to send
   uint32_t RxSeqNumber;       // Subflow's next expected sequence number to receive
