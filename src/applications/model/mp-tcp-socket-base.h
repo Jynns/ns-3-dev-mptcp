@@ -105,6 +105,18 @@ public: // public methods
 
 protected:
 //protected methods
+// Implementing some inherited methods from ns3::TcpSocket. No need to comment them!
+  virtual void SetSndBufSize (uint32_t size);
+  virtual uint32_t GetSndBufSize (void) const;
+  virtual void SetRcvBufSize (uint32_t size);
+  virtual uint32_t GetRcvBufSize (void) const;
+  virtual void SetSSThresh(uint32_t threshold);
+  virtual uint32_t GetSSThresh(void) const;
+  virtual void SetInitialCwnd(uint32_t cwnd);
+  virtual uint32_t GetInitialCwnd(void) const;
+  virtual void SetSegSize(uint32_t size);
+  virtual uint32_t GetSegSize(void) const;
+
   //MPTCP connection and subflow setup
   int  SetupCallback(void);  // Setup SetRxCallback & SetRxCallback call back for a host
   void AdvertiseAvailableAddresses(); // Advertise all addresses to the peer, including the already established address.
