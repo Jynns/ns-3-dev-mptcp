@@ -108,8 +108,7 @@ MpTcpOptionMultiPathCabable::Serialize(Buffer::Iterator start) const
 uint32_t
 MpTcpOptionMultiPathCabable::Deserialize(Buffer::Iterator start)
 {
-    uint8_t kind = start.ReadU8();
-    std::cout << kind;
+    start.ReadU8();
     m_senderToken = start.ReadNtohU32();
     return GetSerializedSize();
 }
@@ -162,6 +161,8 @@ MpTcpOptionJoin::Print(std::ostream& os) const
 void
 MpTcpOptionJoin::Serialize(Buffer::Iterator start) const
 {
+
+    start.WriteU8(GetKind());
     start.WriteHtonU32(m_senderToken);
     start.WriteU8(m_addrId);
 }
@@ -169,6 +170,7 @@ MpTcpOptionJoin::Serialize(Buffer::Iterator start) const
 uint32_t
 MpTcpOptionJoin::Deserialize(Buffer::Iterator start)
 {
+    start.ReadU8();
     m_senderToken = start.ReadNtohU32();
     m_addrId = start.ReadU8();
     return GetSerializedSize();
@@ -183,7 +185,7 @@ MpTcpOptionJoin::GetKind() const
 uint32_t
 MpTcpOptionJoin::GetSerializedSize() const
 {
-    return 5;
+    return 6;
 }
 
 MpTcpOptionAdress::MpTcpOptionAdress()
@@ -223,6 +225,7 @@ MpTcpOptionAdress::Print(std::ostream& os) const
 void
 MpTcpOptionAdress::Serialize(Buffer::Iterator start) const
 {
+    start.WriteU8(GetKind());
     start.WriteU8(m_addrId);
     start.WriteHtonU32(m_addr.Get());
 }
@@ -230,6 +233,7 @@ MpTcpOptionAdress::Serialize(Buffer::Iterator start) const
 uint32_t
 MpTcpOptionAdress::Deserialize(Buffer::Iterator start)
 {
+    start.ReadU8();
     m_addrId = start.ReadU8();
     m_addr = Ipv4Address(start.ReadNtohU32());
     return GetSerializedSize();
@@ -244,7 +248,7 @@ MpTcpOptionAdress::GetKind() const
 uint32_t
 MpTcpOptionAdress::GetSerializedSize() const
 {
-    return 5;
+    return 6;
 }
 
 MpTcpOptionDataSeqMapping::MpTcpOptionDataSeqMapping()
@@ -286,6 +290,7 @@ MpTcpOptionDataSeqMapping::Print(std::ostream& os) const
 void
 MpTcpOptionDataSeqMapping::Serialize(Buffer::Iterator start) const
 {
+    start.WriteU8(GetKind());
     start.WriteU64(m_dSeqNum);
     start.WriteHtonU16(m_dLevelLength);
     start.WriteHtonU32(m_sfSeqNum);
@@ -294,6 +299,7 @@ MpTcpOptionDataSeqMapping::Serialize(Buffer::Iterator start) const
 uint32_t
 MpTcpOptionDataSeqMapping::Deserialize(Buffer::Iterator start)
 {
+    start.ReadU8();
     m_dSeqNum = start.ReadU64();
     m_dLevelLength = start.ReadNtohU16();
     m_sfSeqNum = start.ReadNtohU32(); 
@@ -309,7 +315,7 @@ MpTcpOptionDataSeqMapping::GetKind() const
 uint32_t
 MpTcpOptionDataSeqMapping::GetSerializedSize() const
 {
-    return 14;
+    return 15;
 }
 
 } // namespace ns3
