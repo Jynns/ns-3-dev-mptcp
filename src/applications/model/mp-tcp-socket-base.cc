@@ -1922,6 +1922,14 @@ MpTcpSocketBase::ProcessListen(Ptr<Packet> packet,
                            toAddress);
 }
 
+Ptr<TcpSocketBase>
+MpTcpSocketBase::Fork(void)
+{
+  NS_LOG_FUNCTION_NOARGS();
+  return CopyObject<MpTcpSocketBase>(this);
+}
+
+
 void
 MpTcpSocketBase::ProcessEstablished(uint8_t sFlowIdx,
                                     Ptr<Packet> packet,

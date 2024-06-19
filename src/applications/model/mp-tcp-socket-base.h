@@ -157,7 +157,7 @@ protected:
   virtual void EstimateRtt (uint8_t sFlowIdx, const TcpHeader&);
   virtual void EstimateRtt (const TcpHeader&);
     // Manage data Tx/Rx
-  //virtual Ptr<TcpSocketBase> Fork(void);
+  virtual Ptr<TcpSocketBase> Fork(void);
   virtual void ReceivedAck (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&); // Received an ACK packet
   virtual void ReceivedData (uint8_t sFlowIdx, Ptr<Packet>, const TcpHeader&); // Recv of a data, put into buffer, call L7 to get it if necessary
   virtual void DupAck(const TcpHeader& t, uint32_t count);  // Not in operation, it's pure virtual function from TcpSocketBase

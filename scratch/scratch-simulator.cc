@@ -121,6 +121,7 @@ main(int argc, char* argv[])
         uint32_t ak = DynamicCast<const MpTcpOptionMultiPathCabable>(destination.GetOption(TcpOption::Kind::MP_MPC))->m_senderToken;
         std::cout << ak << af;
 
+        mp1->Listen();
         Simulator::Schedule(Seconds(2), &handler, mp2, remote);
 
         NS_LOG_INFO("Run Simulation.");
