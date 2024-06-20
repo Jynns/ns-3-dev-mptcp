@@ -1351,6 +1351,7 @@ MpTcpSocketBase::CompleteFork(Ptr<Packet> p,
 
     // Create new master subflow (master subsock) and assign its endpoint to the connection endpoint
     Ptr<MpTcpSubFlow> sFlow = CreateObject<MpTcpSubFlow>();
+    sFlow->StartTracing("cWindow");
     sFlow->routeId = (subflows.size() == 0 ? 0 : subflows[subflows.size() - 1]->routeId + 1);
     sFlow->sAddr = m_localAddress; // m_endPoint->GetLocalAddress();
     sFlow->sPort = m_localPort;    // m_endPoint->GetLocalPort();
@@ -3112,7 +3113,7 @@ MpTcpSocketBase::OpenCWND(uint8_t sFlowIdx, uint32_t ackedBytes)
 uint32_t
 MpTcpSocketBase::compute_a_scaled()
 {
-    if (AlgoCC < COUPLED_EPSILON)
+    if (m_algocc < COUPLED_EPSILON)
         exit(1);
 
     uint32_t sum_denominator = 0;
@@ -3140,7 +3141,7 @@ MpTcpSocketBase::compute_a_scaled()
 double
 MpTcpSocketBase::compute_alfa()
 {
-    if (AlgoCC < COUPLED_EPSILON)
+    if (m_algocc < COUPLED_EPSILON)
         exit(300);
 
     if (subflows.size() == 1)
@@ -3560,7 +3561,7 @@ MpTcpSocketBase::ReduceCWND(uint8_t sFlowIdx, DSNMapping* ptrDSN)
     int d = 0;
     calculateTotalCWND();
 
-    switch (AlgoCC)
+    switch (m_algocc)
     {
     case Uncoupled_TCPs:
     case Linked_Increases:
@@ -3651,7 +3652,7 @@ MpTcpSocketBase::calculateTotalCWND()
 uint32_t
 MpTcpSocketBase::compute_total_window()
 {
-    if (AlgoCC < COUPLED_SCALABLE_TCP)
+    if (m_algocc < COUPLED_SCALABLE_TCP)
         exit(10);
 
     totalCwnd = 0;

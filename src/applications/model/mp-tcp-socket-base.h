@@ -276,7 +276,6 @@ protected:
 
 
   uint32_t totalCwnd;
-  CongestionCtrl_t AlgoCC;       // Algorithm for Congestion Control
   DataDistribAlgo_t distribAlgo; // Algorithm for Data Distribution
   PathManager_t pathManager;        // Mechanism for subflow establishement
 

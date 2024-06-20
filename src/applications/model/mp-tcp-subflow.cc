@@ -116,14 +116,14 @@ void
 MpTcpSubFlow::StartTracing(string traced)
 {
     // NS_LOG_UNCOND("("<< routeId << ") MpTcpSubFlow -> starting tracing of: "<< traced);
-    TraceConnectWithoutContext(traced,
+    this->TraceConnectWithoutContext(traced,
                                MakeCallback(&MpTcpSubFlow::CwndTracer, this)); //"CongestionWindow"
 }
 
 void
 MpTcpSubFlow::CwndTracer(uint32_t oldval, uint32_t newval)
 {
-    // NS_LOG_UNCOND("Subflow "<< routeId <<": Moving cwnd from " << oldval << " to " << newval);
+    NS_LOG_UNCOND("Subflow "<< routeId <<": Moving cwnd from " << oldval << " to " << newval);
     cwndTracer.push_back(make_pair(Simulator::Now().GetSeconds(), newval));
     sstTracer.push_back(make_pair(Simulator::Now().GetSeconds(), ssthresh));
     // rttTracer.push_back(make_pair(Simulator::Now().GetSeconds(),
