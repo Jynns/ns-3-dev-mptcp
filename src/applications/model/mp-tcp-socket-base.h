@@ -277,7 +277,7 @@ protected:
 
   uint32_t totalCwnd;
   DataDistribAlgo_t distribAlgo; // Algorithm for Data Distribution
-  PathManager_t pathManager;        // Mechanism for subflow establishement
+  // PathManager_t pathManager;        // Mechanism for subflow establishement
 
   // Window management variables
   uint32_t m_ssThresh;           // Slow start threshold

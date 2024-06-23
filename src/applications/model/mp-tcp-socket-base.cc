@@ -134,6 +134,7 @@ MpTcpSocketBase::MpTcpSocketBase()
     segmentSize = 0;
     nextTxSequence = 1;
     nextRxSequence = 1;
+    maxSubflows = 8;
 
     fLowStartTime = 0;
     FullAcks = 0;
@@ -270,6 +271,8 @@ MpTcpSocketBase::Connect(Ipv4Address servAddr, uint16_t servPort)
     }
     // Set up remote addr:port for this endpoint as we knew it from Connect's parameters
     m_endPoint->SetPeer(servAddr, servPort);
+    auto addrstring = m_endPoint->GetLocalAddress();
+    std::cout << addrstring << std::endl;
 
     if (m_endPoint->GetLocalAddress() == "0.0.0.0")
     {
@@ -1287,6 +1290,7 @@ MpTcpSocketBase::AdvertiseAvailableAddresses()
 
         // Object from L3 to access to routing protocol, Interfaces and NetDevices and so on.
         Ptr<Ipv4L3Protocol> ipv4 = m_node->GetObject<Ipv4L3Protocol>();
+        NS_LOG_INFO("found this many addresses: " << ipv4->GetNInterfaces());
         for (uint32_t i = 0; i < ipv4->GetNInterfaces(); i++)
         {
             // Ptr<NetDevice> device = m_node->GetDevice(i);
@@ -1304,15 +1308,14 @@ MpTcpSocketBase::AdvertiseAvailableAddresses()
             header.AppendOption(
                 CreateObject<MpTcpOptionAdress>(addrInfo->addrID, addrInfo->ipv4Addr));
             localAddrs.push_back(addrInfo);
-            header.SetWindowSize(AdvertisedWindowSize());
-            // m_tcp->SendPacket(pkt, header, m_endPoint->GetLocalAddress(), m_remoteAddress);
-            m_tcp->SendPacket(pkt,
-                              header,
-                              m_localAddress,
-                              m_remoteAddress,
-                              FindOutputNetDevice(m_localAddress));
-            NS_LOG_INFO("AdvertiseAvailableAddresses-> " << header);
         }
+        header.SetWindowSize(AdvertisedWindowSize());
+        m_tcp->SendPacket(pkt,
+                          header,
+                          m_localAddress,
+                          m_remoteAddress,
+                          FindOutputNetDevice(m_localAddress));
+        NS_LOG_INFO("AdvertiseAvailableAddresses-> " << header);
     }
     else
     {
@@ -1351,7 +1354,7 @@ MpTcpSocketBase::CompleteFork(Ptr<Packet> p,
 
     // Create new master subflow (master subsock) and assign its endpoint to the connection endpoint
     Ptr<MpTcpSubFlow> sFlow = CreateObject<MpTcpSubFlow>();
-    sFlow->StartTracing("cWindow");
+    sFlow->StartTracing("cWindow"); // TODO REMOVE
     sFlow->routeId = (subflows.size() == 0 ? 0 : subflows[subflows.size() - 1]->routeId + 1);
     sFlow->sAddr = m_localAddress; // m_endPoint->GetLocalAddress();
     sFlow->sPort = m_localPort;    // m_endPoint->GetLocalPort();
@@ -1551,48 +1554,51 @@ bool
 MpTcpSocketBase::IsThereRoute(Ipv4Address src, Ipv4Address dst)
 {
     NS_LOG_FUNCTION(this << src << dst);
-    return true;
-    /*
+
     bool found = false;
     // Look up the source address
-  //  Ptr<Ipv4> ipv4 = m_node->GetObject<Ipv4>();
+    //  Ptr<Ipv4> ipv4 = m_node->GetObject<Ipv4>();
     Ptr<Ipv4L3Protocol> ipv4 = m_node->GetObject<Ipv4L3Protocol>();
-    if (ipv4->GetRoutingProtocol() != 0)
-      {
+    if (ipv4->GetRoutingProtocol() != nullptr)
+    {
         Ipv4Header l3Header;
         Socket::SocketErrno errno_;
         Ptr<Ipv4Route> route;
         //.....................................................................................
-        //NS_LOG_INFO("----------------------------------------------------");NS_LOG_INFO("IsThereRoute()
-  -> src: " << src << " dst: " << dst);
+        // NS_LOG_INFO("----------------------------------------------------");
+        NS_LOG_INFO("IsThereRoute() -> src: " << src << " dst: " << dst);
         // Get interface number from IPv4Address via ns3::Ipv4::GetInterfaceForAddress(Ipv4Address
-  address); int32_t interface = ipv4->GetInterfaceForAddress(src);        // Morteza uses sign
-  integers Ptr<Ipv4Interface> v4Interface = ipv4->GetRealInterfaceForAddress(src); Ptr<NetDevice>
-  v4NetDevice = v4Interface->GetDevice();
-        //PrintIpv4AddressFromIpv4Interface(v4Interface, interface);
+        // address);
+        int32_t interface = ipv4->GetInterfaceForAddress(src); // Morteza uses signintegers
+        Ptr<Ipv4Interface> v4Interface = ipv4->GetInterface(interface);
+        Ptr<NetDevice> v4NetDevice = v4Interface->GetDevice();
+        // PrintIpv4AddressFromIpv4Interface(v4Interface, interface);
         NS_ASSERT_MSG(interface != -1, "There is no interface object for the the src address");
         // Get NetDevice from Interface via ns3::Ipv4::GetNetDevice(uint32_t interface);
         Ptr<NetDevice> oif = ipv4->GetNetDevice(interface);
         NS_ASSERT(oif == v4NetDevice);
+        // this looks like it doesnt belong here
 
         //.....................................................................................
         l3Header.SetSource(src);
         l3Header.SetDestination(dst);
         route = ipv4->GetRoutingProtocol()->RouteOutput(Ptr<Packet>(), l3Header, oif, errno_);
-        if ((route != 0)*/
-    /* && (src == route->GetSource())*/ /*)
-{
-NS_LOG_DEBUG ("IsThereRoute -> Route from src "<< src << " to dst " << dst << " oit ["<<
-oif->GetIfIndex()<<"], exist  Gateway: " << route->GetGateway()); found = true;
-}
-else
-{
-NS_LOG_DEBUG ("IsThereRoute -> No Route from srcAddr "<< src << " to dstAddr " << dst << " oit
-["<<oif->GetIfIndex()<<"], exist Gateway: " << route->GetGateway());
-}
-}
-return found;
-*/
+        if ((route != nullptr)
+            /* && (src == route->GetSource())*/)
+        {
+            NS_LOG_DEBUG("IsThereRoute -> Route from src "
+                         << src << " to dst " << dst << " oit [" << oif->GetIfIndex()
+                         << "], exist  Gateway: " << route->GetGateway());
+            found = true;
+        }
+        else
+        {
+            NS_LOG_DEBUG("IsThereRoute -> No Route from srcAddr "
+                         << src << " to dstAddr " << dst << " oit[" << oif->GetIfIndex()
+                         << "], exist Gateway: " << route->GetGateway());
+        }
+    }
+    return found;
 }
 
 string
@@ -1720,8 +1726,8 @@ MpTcpSocketBase::CloseMultipathConnection()
     }
     if (cpt == subflows.size())
     {
-        if (m_state == ESTABLISHED && client) // We could remove client ... it should work but it
-                                              // generate plots for receiver as well.
+        if (m_state == ESTABLISHED && client) // We could remove client ... it should work but
+                                              // it generate plots for receiver as well.
         {
             NS_LOG_INFO("CloseMultipathConnection -> GENERATE PLOTS SUCCESSFULLY -> HoOoOrA  pAck: "
                         << pAck);
@@ -1747,8 +1753,9 @@ MpTcpSocketBase::CloseMultipathConnection()
                 subflows[0]->m_endPoint = 0;
             m_tcp->RemoveSocket(this);
             // m_tcp->RemoveLocalToken(localToken);
-            /*std::vector<Ptr<TcpSocketBase> >::iterator it = std::find(m_tcp->m_sockets.begin(),
-            m_tcp->m_sockets.end(), this); m_tcp->m_sockets if (it != m_tcp->m_sockets.end())
+            /*std::vector<Ptr<TcpSocketBase> >::iterator it =
+            std::find(m_tcp->m_sockets.begin(), m_tcp->m_sockets.end(), this); m_tcp->m_sockets
+            if (it != m_tcp->m_sockets.end())
               {
                 m_tcp->m_sockets.erase(it);
               }*/
@@ -1850,16 +1857,16 @@ MpTcpSocketBase::DoPeerClose(uint8_t sFlowIdx)
     NS_ASSERT(sFlow->state == ESTABLISHED || sFlow->state == SYN_RCVD);
     /*
      * Receiver gets in-sequence FIN packet from sender.
-     * It sends ACK for it and also send its own FIN at the same time since our implementation is
-     * unidirectional i.e., receiver is not suppose to send data packet to sender and its
+     * It sends ACK for it and also send its own FIN at the same time since our implementation
+     * is unidirectional i.e., receiver is not suppose to send data packet to sender and its
      * sendingBuffer is uninitialized!
      */
     // Move the state of subflow to CLOSE_WAIT
     NS_LOG_INFO("(" << (int)sFlow->routeId << ") " << TcpStateName[sFlow->state]
                     << " -> CLOSE_WAIT {DoPeerClose}");
     sFlow->state = CLOSE_WAIT;
-    Close(sFlowIdx); // This would cause simultaneous close since receiver also want to close when
-                     // she got FIN.
+    Close(sFlowIdx); // This would cause simultaneous close since receiver also want to close
+                     // when she got FIN.
 
     if (sFlow->state == LAST_ACK)
     {
@@ -1912,8 +1919,8 @@ MpTcpSocketBase::ProcessListen(uint8_t sFlowIdx,
      */
     if (tcpflags == TcpHeader::SYN)
     { // Receiver got new SYN...Sends SYN+ACK.
-        // This is a valid condition when receiver got SYN with MP_JOIN from sender and create new
-        // subflow with LISTEN state.
+        // This is a valid condition when receiver got SYN with MP_JOIN from sender and create
+        // new subflow with LISTEN state.
         NS_LOG_INFO(" (" << sFlow->routeId << ") " << TcpStateName[sFlow->state] << " -> SYN_RCVD");
         sFlow->state = SYN_RCVD;
         sFlow->RxSeqNumber = (mptcpHeader.GetSequenceNumber()).GetValue() + 1;
@@ -2013,8 +2020,8 @@ MpTcpSocketBase::ProcessEstablished(uint8_t sFlowIdx,
         //        }
     }
     else
-    { // Received RST or the TCP flags is invalid, in either case, terminate this socket -> should
-      // we really Terminate here???
+    { // Received RST or the TCP flags is invalid, in either case, terminate this socket ->
+      // should we really Terminate here???
         if (tcpflags != TcpHeader::RST)
         { // this must be an invalid flag, send reset
             NS_LOG_LOGIC("Illegal flag " << tcpflags << " received. Reset packet is sent."); //
@@ -2044,8 +2051,8 @@ MpTcpSocketBase::ProcessSynSent(uint8_t sFlowIdx, Ptr<Packet> packet, const TcpH
 
     // Execute a action based on tcpflags
     if (tcpflags == 0)
-    { // Bare data, accept it and move to ESTABLISHED state. This is not a normal behaviour. Remove
-      // this? Cleanup !
+    { // Bare data, accept it and move to ESTABLISHED state. This is not a normal behaviour.
+      // Remove this? Cleanup !
         NS_ASSERT(tcpflags != 0);
     }
     else if (tcpflags == TcpHeader::ACK)
@@ -2058,12 +2065,12 @@ MpTcpSocketBase::ProcessSynSent(uint8_t sFlowIdx, Ptr<Packet> packet, const TcpH
     }
     else if (tcpflags == (TcpHeader::SYN | TcpHeader::ACK))
     { // Handshake completed for sender... Send final ACK
-        NS_LOG_UNCOND(
-            "---------------------- HandShake is Completed in ClientSide  ----------------------"
-            << subflows.size());
+        NS_LOG_UNCOND("---------------------- HandShake is Completed in ClientSide  "
+                      "----------------------"
+                      << subflows.size());
         if (!m_connected)
-        { // This function only excute for initial subflow since when it has established then MPTCP
-          // connection is already established!!
+        { // This function only excute for initial subflow since when it has established then
+          // MPTCP connection is already established!!
             m_connected = true;
             m_endPoint->SetPeer(m_remoteAddress, m_remotePort); // TODO Is this needed at all?
             fLowStartTime =
@@ -2076,8 +2083,8 @@ MpTcpSocketBase::ProcessSynSent(uint8_t sFlowIdx, Ptr<Packet> packet, const TcpH
         if ((m_largePlotting && (flowType.compare("Large") == 0)) ||
             (m_shortPlotting && (flowType.compare("Short") == 0)))
             sFlow->StartTracing("cWindow");
-        // sFlow->rtt->Init(mptcpHeader.GetAckNumber()); not needed since subflow handles these rtt
-        // functions
+        // sFlow->rtt->Init(mptcpHeader.GetAckNumber()); not needed since subflow handles these
+        // rtt functions
         sFlow->initialSequnceNumber = (mptcpHeader.GetAckNumber().GetValue());
         NS_LOG_INFO("(" << sFlow->routeId << ") InitialSeqNb of data packet should be --->>> "
                         << sFlow->initialSequnceNumber << " Cwnd: " << sFlow->cwnd);
@@ -2098,7 +2105,7 @@ MpTcpSocketBase::ProcessSynSent(uint8_t sFlowIdx, Ptr<Packet> packet, const TcpH
         {
             NS_LOG_WARN("---------------------- AdvertiseAvailableAddresses By Client "
                         "---------------------");
-            switch (pathManager)
+            switch (m_pathManager)
             {
             case Default:
                 // No address advertisement
@@ -2165,9 +2172,10 @@ MpTcpSocketBase::ProcessSynRcvd(uint8_t sFlowIdx,
         sFlow->connected = true;    // This means subflow is established
         sFlow->retxEvent
             .Cancel(); // This would cancel ReTxTimer where it being setup when SYN is sent.
-        // Danger? Does this assertion is correct? what if lack ack of 3WHS plus first d-packet get
-        // drop??! NS_ASSERT_MSG(sFlow->RxSeqNumber == mptcpHeader.GetSequenceNumber().GetValue(),
-        // "Ops"); Following two lines are equal to this single statement "sFlow->MaxSeqNb =
+        // Danger? Does this assertion is correct? what if lack ack of 3WHS plus first d-packet
+        // get drop??! NS_ASSERT_MSG(sFlow->RxSeqNumber ==
+        // mptcpHeader.GetSequenceNumber().GetValue(), "Ops"); Following two lines are equal to
+        // this single statement "sFlow->MaxSeqNb =
         // ++sFlow->TxSeqNumber";
         sFlow->TxSeqNumber++;
         sFlow->maxSeqNb = sFlow->TxSeqNumber - 1;
@@ -2303,9 +2311,8 @@ MpTcpSocketBase::TimeWait(uint8_t sFlowIdx)
                     << " -> TIME_WAIT {TimeWait}");
     sFlow->state = TIME_WAIT;
     CancelAllTimers(sFlowIdx);
-    // Move from TIME_WAIT to CLOSED after 2*MSL. Max segment lifetime is 2 min according to RFC793,
-    // p.28
-    // sFlow->m_timewaitEvent = Simulator::Schedule(Seconds(2 * 120),
+    // Move from TIME_WAIT to CLOSED after 2*MSL. Max segment lifetime is 2 min according to
+    // RFC793, p.28 sFlow->m_timewaitEvent = Simulator::Schedule(Seconds(2 * 120),
     // &MpTcpSocketBase::CloseMultipathConnection, this);
     sFlow->m_timewaitEvent =
         Simulator::Schedule(Simulator::Now(), &MpTcpSocketBase::CloseMultipathConnection, this);
@@ -2331,11 +2338,10 @@ MpTcpSocketBase::ProcessLastAck(uint8_t sFlowIdx, Ptr<Packet> packet, const TcpH
     {
         if (mptcpHeader.GetSequenceNumber() == SequenceNumber32(sFlow->RxSeqNumber))
         { // This ACK corresponds to the FIN sent. This socket closed peacefully.
-            NS_LOG_INFO(
-                "("
-                << (int)sFlow->routeId
-                << ") ProcessLastAck -> This ACK corresponds to the FIN sent -> CloseAndNotify ("
-                << (int)sFlowIdx << ")");
+            NS_LOG_INFO("(" << (int)sFlow->routeId
+                            << ") ProcessLastAck -> This ACK corresponds to the FIN sent -> "
+                               "CloseAndNotify ("
+                            << (int)sFlowIdx << ")");
             CloseAndNotify(sFlowIdx);
         }
     }
@@ -2392,12 +2398,13 @@ MpTcpSocketBase::ReadOptions(uint8_t sFlowIdx, Ptr<Packet> pkt, const TcpHeader&
     if (mptcpHeader.HasOption(TcpOption::MP_ADDR) && (mpRecvState == MP_MPC))
     {
         // Receiver store sender's addresses information and send back its addresses.
-        // If there are several addresses to advertise then multiple OPT_ADDR would be attached to
-        // the TCP Options.
+        // If there are several addresses to advertise then multiple OPT_ADDR would be attached
+        // to the TCP Options.
         const TcpHeader::TcpOptionList& optionlist = mptcpHeader.GetOptionList();
         for (auto i = optionlist.begin(); i != optionlist.end(); ++i)
         {
-            if ((*i)->GetKind() == MP_ADDR)
+            uint8_t k = (*i)->GetKind();
+            if (k == TcpOption::Kind::MP_ADDR)
             {
                 MpTcpAddressInfo* addrInfo = new MpTcpAddressInfo();
                 auto ad = DynamicCast<const MpTcpOptionAdress>((*i));
@@ -2428,14 +2435,14 @@ MpTcpSocketBase::ReadOptions(uint8_t sFlowIdx, Ptr<Packet> pkt, const TcpHeader&
             NS_LOG_DEBUG(Simulator::Now().GetSeconds()
                          << "---------------------- AdvertiseAvailableAddresses By Server "
                          << "---------------------");
-            NS_ASSERT(pathManager == FullMesh);
+            NS_ASSERT(m_pathManager == FullMesh);
             AdvertiseAvailableAddresses(); // this is what the receiver has to do
             return false;
         }
         // If addresses already sent then initiate subflows...
         else if (mpSendState == MP_ADDR)
         {
-            NS_ASSERT(pathManager == FullMesh);
+            NS_ASSERT(m_pathManager == FullMesh);
             InitiateSubflows(); // this is what the initiator has to do
             return false;
         }
@@ -2467,7 +2474,8 @@ MpTcpSocketBase::ReadOptions(Ptr<Packet> pkt, const TcpHeader& mptcpHeader)
     }
     NS_LOG_UNCOND("[" << m_node->GetId()
                       << "] Wrong option is received -> RETURN. MptcpHeader: " << mptcpHeader);
-    return false; // If no option MP_CAPABLE is found -> RETURN then ForwardUp() should RETURN too!
+    return false; // If no option MP_CAPABLE is found -> RETURN then ForwardUp() should RETURN
+                  // too!
 }
 
 void
@@ -2522,11 +2530,11 @@ MpTcpSocketBase::ReceivedAck(uint8_t sFlowIdx, Ptr<Packet> packet, const TcpHead
                 NS_ASSERT(3 != 3);
                 break;
             }
-            // There is a sent segment with requested SequenceNumber and ack is for first unacked
-            // byte!!
+            // There is a sent segment with requested SequenceNumber and ack is for first
+            // unacked byte!!
             else if ((ptrDSN->subflowSeqNumber == ack) && (ack == sFlow->highestAck + 1))
-            { // Case 2: Potentially a duplicated ACK, so ack should be smaller than nextExpectedSN
-              // to send.
+            { // Case 2: Potentially a duplicated ACK, so ack should be smaller than
+              // nextExpectedSN to send.
                 if (ack < sFlow->TxSeqNumber)
                 {
                     // NS_LOG_ERROR(Simulator::Now().GetSeconds()<< " [" << m_node->GetId()<< "]
@@ -2606,10 +2614,11 @@ MpTcpSocketBase::ReceivedData(uint8_t sFlowIdx, Ptr<Packet> p, const TcpHeader& 
             Ptr<const MpTcpOptionDataSeqMapping> optDSN =
                 DynamicCast<const MpTcpOptionDataSeqMapping>(*i);
             if (optDSN->m_sfSeqNum == sFlow->RxSeqNumber)
-            { /* Received packet is in-sequence at sub-flow level. Now check connection level? */
+            { /* Received packet is in-sequence at sub-flow level. Now check connection level?
+               */
                 if (optDSN->m_dSeqNum == nextRxSequence)
-                { /** Received packet is in-sequence at connection level but in-order at sub-flow
-                     level **/
+                { /** Received packet is in-sequence at connection level but in-order at
+                     sub-flow level **/
                     uint32_t amountRead = recvingBuffer.ReadPacket(p, optDSN->m_dLevelLength);
                     if (amountRead == 0)
                     {
@@ -2693,9 +2702,9 @@ MpTcpSocketBase::ReceivedData(uint8_t sFlowIdx, Ptr<Packet> p, const TcpHeader& 
                 NS_LOG_INFO("Data received is duplicated in Subflow Layer so it has been rejected! "
                             "subflowSeq: "
                             << optDSN->m_sfSeqNum << " dataSeq: " << optDSN->m_dSeqNum);
-                SendEmptyPacket(
-                    sFlowIdx,
-                    TcpHeader::ACK); // Ask for next expected sub-flow sequence number to receive.
+                SendEmptyPacket(sFlowIdx,
+                                TcpHeader::ACK); // Ask for next expected sub-flow sequence
+                                                 // number to receive.
             }
             else
                 NS_FATAL_ERROR_NO_MSG(); // There should not be any other condition!
@@ -2722,8 +2731,8 @@ MpTcpSocketBase::StoreUnOrderedData(DSNMapping* toStore)
         }
         else if (toStore->dataSeqNumber < stored->dataSeqNumber)
         {
-            // This assertion is to make sure un-ordered segments are stored in-order of subflow &
-            // connection level.
+            // This assertion is to make sure un-ordered segments are stored in-order of subflow
+            // & connection level.
             if (toStore->subflowIndex == stored->subflowIndex)
                 NS_ASSERT(toStore->subflowSeqNumber < stored->subflowSeqNumber);
 
@@ -2777,8 +2786,8 @@ MpTcpSocketBase::DupAck(uint8_t sFlowIdx, DSNMapping* ptrDSN)
     //    { // RFC3042 Limited transmit: Send a new packet for each duplicated ACK before fast
     //    retransmit
     //      NS_LOG_INFO ("Limited transmit");
-    //      uint32_t sz = SendDataPacket(sFlowIdx, sFlow->MSS, false); // WithAck or Without ACK?
-    //      NotifyDataSent(sz);
+    //      uint32_t sz = SendDataPacket(sFlowIdx, sFlow->MSS, false); // WithAck or Without
+    //      ACK? NotifyDataSent(sz);
     //    };
 }
 
@@ -2824,7 +2833,7 @@ MpTcpSocketBase::NewACK(uint8_t sFlowIdx, const TcpHeader& mptcpHeader, Ptr<TcpO
     }
 
     sFlow->highestAck = std::max(sFlow->highestAck, ack - 1);
-    NS_LOG_WARN("NewACK-> sFlow->highestAck: " << sFlow->highestAck);
+    NS_LOG_WARN("NewACK-> sFlow->highestAck: " << sFlow->highestAck << " on subflow: " << sFlowIdx);
 
     currentSublow = sFlow->routeId;
     SendPendingData(sFlow->routeId); // in newack()
@@ -3357,8 +3366,8 @@ MpTcpSocketBase::SetRcvBufSize(uint32_t size)
 {
     // m_rxBuffer.SetMaxBufferSize(size);
     // recvingBuffer = new DataBuffer(size);
-    //  Size of recving buffer does not allocate any memory instantly but allows node to store to
-    //  this bound.
+    //  Size of recving buffer does not allocate any memory instantly but allows node to store
+    //  to this bound.
     recvingBuffer.SetBufferSize(50000000);
 }
 
@@ -3372,9 +3381,9 @@ MpTcpSocketBase::GetRcvBufSize(void) const
 void
 MpTcpSocketBase::SetInitialCwnd(uint32_t cwnd)
 {
-    NS_ABORT_MSG_UNLESS(
-        m_state == CLOSED,
-        "MpTcpsocketBase::SetInitialCwnd() cannot change initial cwnd after connection started.");
+    NS_ABORT_MSG_UNLESS(m_state == CLOSED,
+                        "MpTcpsocketBase::SetInitialCwnd() cannot change initial cwnd after "
+                        "connection started.");
     m_initialCWnd = cwnd;
 }
 
@@ -3453,8 +3462,8 @@ MpTcpSocketBase::DiscardUpTo(uint8_t sFlowIdx, uint32_t ack)
     {
         ++next;
         DSNMapping* ptrDSN = *current;
-        // All segments before ackSeqNum should be removed from the mapDSN list. Maybe equal part
-        // never run due to if condition above.
+        // All segments before ackSeqNum should be removed from the mapDSN list. Maybe equal
+        // part never run due to if condition above.
         if (ptrDSN->subflowSeqNumber + ptrDSN->dataLevelLength <= ack)
         {
             //          if (sFlowIdx == 0)
@@ -3538,8 +3547,8 @@ MpTcpSocketBase::ReadUnOrderedData()
         else if (ptrDSN->subflowSeqNumber == sFlow->RxSeqNumber)
         { /* Stored segment is in-order only at sub-flow level! */
             NS_ASSERT((ptrDSN->dataSeqNumber > nextRxSequence));
-            // NS_LOG_UNCOND("ReadUnOrderedData()-> sub-flow is in-order but connection is out of
-            // order " << (int)sFlow->routeId);
+            // NS_LOG_UNCOND("ReadUnOrderedData()-> sub-flow is in-order but connection is out
+            // of order " << (int)sFlow->routeId);
             sFlow->RxSeqNumber += ptrDSN->dataLevelLength;
             sFlow->highestAck = std::max(sFlow->highestAck, ptrDSN->acknowledgement - 1);
             // TODO Should let sender know about this update ?!?!
@@ -3612,9 +3621,9 @@ MpTcpSocketBase::ReduceCWND(uint8_t sFlowIdx, DSNMapping* ptrDSN)
 void
 MpTcpSocketBase::calculateAlpha()
 {
-    // this method is called whenever a congestion happen in order to regulate the agressivety of
-    // subflows alpha = cwnd_total * MAX(cwnd_i / rtt_i^2) / {SUM(cwnd_i / rtt_i))^2}   //RFC 6356
-    // formula (2)
+    // this method is called whenever a congestion happen in order to regulate the agressivety
+    // of subflows alpha = cwnd_total * MAX(cwnd_i / rtt_i^2) / {SUM(cwnd_i / rtt_i))^2}   //RFC
+    // 6356 formula (2)
 
     NS_LOG_FUNCTION_NOARGS();
     alpha = 0;

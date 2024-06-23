@@ -64,7 +64,7 @@ handlerSend(Ptr<MpTcpSocketBase> m_socket)
 {
     // TODO move this to function
     uint32_t m_totBytes = 0;
-    uint32_t m_maxBytes = 10;
+    uint32_t m_maxBytes = 1000000;
     uint32_t m_sendSize = 140000;
 
     NS_LOG_DEBUG("m_totBytes: " << m_totBytes << " maxByte: " << m_maxBytes << " GetTxAvailable: "
@@ -111,8 +111,9 @@ main(int argc, char* argv[])
 {
     // Config::Set("/NodeList/*/$ns3::TcpL4Protocol/SocketType", TypeIdValue(tid));
     //-> there has to be a valid ns3 congestion algo when creating the socke
+    int mode = 3;
     NS_LOG_UNCOND("Scratch Simulator");
-    if (1 != 1)
+    if (mode == 1)
     {
         // Config::SetDefault("ns3::Ipv4GlobalRouting::FlowEcmpRouting", BooleanValue(true));
         Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1400));
@@ -184,7 +185,7 @@ main(int argc, char* argv[])
         Simulator::Destroy();
         NS_LOG_INFO("Done.");
     }
-    else
+    else if(mode == 2)
     {
         // new topology m2 --dev0-- n --dev1-- m1
         // Config::SetDefault("ns3::Ipv4GlobalRouting::FlowEcmpRouting", BooleanValue(true));
@@ -246,6 +247,78 @@ main(int argc, char* argv[])
         Simulator::Run();
         Simulator::Destroy();
         NS_LOG_INFO("Done.");
+    }else if(mode == 3){
+        // new topology m2
+        //    10.1.3.0
+        //  |-----1------|      (main flow)
+        //  m2           m1
+        //  |-----2------|      (join)
+        //    10.1.2.0
+        // Config::SetDefault("ns3::Ipv4GlobalRouting::FlowEcmpRouting", BooleanValue(true));
+        Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1400));
+        Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(0));
+        // Config::SetDefault("ns3::DropTailQueue::Mode", StringValue("QUEUE_MODE_PACKETS"));
+        // Config::SetDefault("ns3::DropTailQueue::MaxPackets", UintegerValue(100));
+        Config::SetDefault("ns3::TcpL4Protocol::SocketType",
+                           TypeIdValue(MpTcpSocketBase::GetTypeId()));
+        Config::SetDefault("ns3::MpTcpSocketBase::MaxSubflows", UintegerValue(8));
+        Config::SetDefault("ns3::MpTcpSocketBase::PathManagement", StringValue("FullMesh"));
+        NodeContainer m2m1;
+        m2m1.Create(2);
+
+        PointToPointHelper p1;
+        p1.SetDeviceAttribute("DataRate", DataRateValue(DataRate(10000000)));
+        p1.SetChannelAttribute("Delay", TimeValue(MilliSeconds(10)));
+        NetDeviceContainer dev1 = p1.Install(m2m1);
+
+        PointToPointHelper p2;
+        p2.SetDeviceAttribute("DataRate", DataRateValue(DataRate(10000000)));
+        p2.SetChannelAttribute("Delay", TimeValue(MilliSeconds(10)));
+        NetDeviceContainer dev2 = p2.Install(m2m1);
+
+
+        InternetStackHelper internet;
+        internet.InstallAll();
+
+        Ipv4AddressHelper ipv4;
+        ipv4.SetBase("10.1.3.0", "255.255.255.0");
+        Ipv4InterfaceContainer ipInterfs = ipv4.Assign(dev1);
+        ipv4.SetBase("10.1.2.0", "255.255.255.0");
+        ipv4.Assign(dev2);
+
+        Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
+
+        Ptr<MpTcpSocketBase> mp1 = DynamicCast<MpTcpSocketBase>(
+            Socket::CreateSocket(m2m1.Get(1), TcpSocketFactory::GetTypeId()));
+        Ptr<MpTcpSocketBase> mp2 = DynamicCast<MpTcpSocketBase>(
+            Socket::CreateSocket(m2m1.Get(0), TcpSocketFactory::GetTypeId()));
+        mp1->SetPathManager(FullMesh);   // for some reason the default argument is ignored TODO URGENT FIX
+        mp2->SetPathManager(FullMesh);        
+
+        //Bind to device of main flow
+        mp2->BindToNetDevice(dev1.Get(0));
+        mp1->BindToNetDevice(dev1.Get(1));
+
+        mp2->Bind(); // bind call for MPTCP 
+        ns3::Address f = mp2->GetBoundNetDevice()->GetAddress();
+        std::cout << "Bound Address mp2 "<< f << std::endl;
+
+        mp1->SetRecvCallback(MakeCallback(&ReceivePacket));
+        InetSocketAddress remote = InetSocketAddress(ipInterfs.GetAddress(1), 4477);
+        mp1->Bind(remote);
+        f = mp1->GetBoundNetDevice()->GetAddress();
+        std::cout << "Bound Address mp1 "<< f << std::endl;
+
+        mp1->Listen();
+
+        Simulator::Schedule(Seconds(2), &handlerConnect, mp2, remote);
+        Simulator::Schedule(Seconds(2.5), &handlerSend, mp2);
+        Config::ConnectWithoutContext ("/NodeList/0/$ns3::TcpL4Protocol/SocketList/0/CongestionWindow", MakeCallback (&CwndTracer));
+
+        NS_LOG_INFO("Run Simulation.");
+        Simulator::Stop(Seconds(20.0));
+        Simulator::Run();
+        Simulator::Destroy();
     }
     return 0;
 }
