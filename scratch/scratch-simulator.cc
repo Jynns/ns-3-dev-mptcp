@@ -252,7 +252,7 @@ main(int argc, char* argv[])
         //    10.1.3.0
         //  |-----1------|      (main flow)
         //  m2           m1
-        //  |-----2------|      (join)
+        //  |-----2------|      (bottle neck)
         //    10.1.2.0
         // Config::SetDefault("ns3::Ipv4GlobalRouting::FlowEcmpRouting", BooleanValue(true));
         Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1400));
@@ -272,8 +272,8 @@ main(int argc, char* argv[])
         NetDeviceContainer dev1 = p1.Install(m2m1);
 
         PointToPointHelper p2;
-        p2.SetDeviceAttribute("DataRate", DataRateValue(DataRate(10000000)));
-        p2.SetChannelAttribute("Delay", TimeValue(MilliSeconds(10)));
+        p2.SetDeviceAttribute("DataRate", DataRateValue(DataRate(10000)));
+        p2.SetChannelAttribute("Delay", TimeValue(MilliSeconds(20)));
         NetDeviceContainer dev2 = p2.Install(m2m1);
 
 
