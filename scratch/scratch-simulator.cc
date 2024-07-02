@@ -24,6 +24,7 @@
 #include "ns3/packet-sink.h"
 #include "ns3/point-to-point-helper.h"
 #include "ns3/point-to-point-module.h"
+#include "ns3/mp-tcp-cc-agent.h"
 
 #include <fstream>
 #include <string>
@@ -31,6 +32,43 @@
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("ScratchSimulator");
+
+class CongestionExampleAgent : public MpTcpCongestionControlAgent
+
+{
+  public:
+    CongestionExampleAgent();
+    ~CongestionExampleAgent();
+
+    static TypeId GetTypeId(void);
+    void virtual Infer(Ptr<MpTcpSubFlow> sflow,
+                       Ptr<CongestionInfo> ccInfo); //<! performs the action if inference (ACK
+                                                    //   or RTO) by updating subflow cwnd
+};
+
+CongestionExampleAgent::CongestionExampleAgent()
+{
+}
+
+CongestionExampleAgent::~CongestionExampleAgent()
+{
+}
+
+TypeId
+CongestionExampleAgent::GetTypeId(void)
+{
+    static TypeId tid = TypeId("ns3::CongestionExampleAgent")
+                            .SetParent<MpTcpCongestionControlAgent>()
+                            .AddConstructor<CongestionExampleAgent>();
+    return tid;
+}
+
+void
+CongestionExampleAgent::Infer(Ptr<MpTcpSubFlow> sflow, Ptr<CongestionInfo> ccInfo)
+{
+    sflow->cwnd = ccInfo->AckOrTimeout ? sflow->cwnd.Get() * 2 : sflow->MSS;
+    NS_LOG_INFO("Hoppla es ist so weit");
+}
 
 void
 ReceivePacket(Ptr<Socket> socket)
@@ -263,6 +301,7 @@ main(int argc, char* argv[])
                            TypeIdValue(MpTcpSocketBase::GetTypeId()));
         Config::SetDefault("ns3::MpTcpSocketBase::MaxSubflows", UintegerValue(8));
         Config::SetDefault("ns3::MpTcpSocketBase::PathManagement", StringValue("FullMesh"));
+        //Config::SetDefault("ns3::MpTcpSocketBase::CongestionControlAgent", StringValue("ns3::CongestionExampleAgent"));
         NodeContainer m2m1;
         m2m1.Create(2);
 
@@ -310,6 +349,7 @@ main(int argc, char* argv[])
         std::cout << "Bound Address mp1 "<< f << std::endl;
 
         mp1->Listen();
+        mp2->SetCongestionAgent(CreateObject<CongestionExampleAgent>());
 
         Simulator::Schedule(Seconds(2), &handlerConnect, mp2, remote);
         Simulator::Schedule(Seconds(2.5), &handlerSend, mp2);

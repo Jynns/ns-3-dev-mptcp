@@ -65,9 +65,9 @@ MpTcpSocketBase::GetTypeId()
                           UintegerValue(50),
                           MakeUintegerAccessor(&MpTcpSocketBase::m_rGap),
                           MakeUintegerChecker<uint32_t>())
-            // T ODO please fix this is so ugly and only here because we are using the old Buffer
+            // TODO please fix this. It is so ugly and only here because we are using the old Buffer
             // implementation; there is already a segmentsize attribute
-            //  Solution: override get und set segmentsize
+            // Solution: override get und set segmentsize
             .AddAttribute(
                 "SegmentSizeMP",
                 "TCP maximum segment size in bytes (may be adjusted based on MTU discovery)",
@@ -80,6 +80,11 @@ MpTcpSocketBase::GetTypeId()
                 ObjectVectorValue(),
                 MakeObjectVectorAccessor(&MpTcpSocketBase::subflows),
                 MakeObjectVectorChecker<MpTcpSocketBase>())*/
+            /* .AddAttribute("CongestionControlAgent",
+                          "set the agent that is used for congestion control",
+                          StringValue("MpTcpCongestionControlAgent"),
+                          MakeStringAccessor(&MpTcpSocketBase::m_ccAgentType),
+                          MakeStringChecker())*/
 
             .AddAttribute("ShortFlowTCP",
                           "Use TCP for short flows",
@@ -135,6 +140,7 @@ MpTcpSocketBase::MpTcpSocketBase()
     nextTxSequence = 1;
     nextRxSequence = 1;
     maxSubflows = 8;
+    m_isCCAgent = false;
 
     fLowStartTime = 0;
     FullAcks = 0;
@@ -318,6 +324,11 @@ MpTcpSocketBase::Connect(Ipv4Address servAddr, uint16_t servPort)
     NS_LOG_INFO("(" << (int)sFlow->routeId << ") " << TcpStateName[sFlow->state] << " -> SYN_SENT");
     m_state = SYN_SENT;
     sFlow->state = SYN_SENT; // Subflow state should be change first then SendEmptyPacket...
+    if (m_isCCAgent)
+    {
+        sFlow->ccAgent = GetCongestionAgent();
+        sFlow->ccInfo = GetCongestionInfo();
+    }
     SendEmptyPacket(sFlow->routeId, TcpHeader::SYN);
     currentSublow = sFlow->routeId; // update currentSubflow in case close just after 3WHS.
     NS_LOG_INFO(this << "  MPTCP connection is initiated (Sender): " << sFlow->sAddr << ":"
@@ -1371,6 +1382,12 @@ MpTcpSocketBase::CompleteFork(Ptr<Packet> p,
     subflows.insert(subflows.end(), sFlow);
     sFlow->RxSeqNumber = (mptcpHeader.GetSequenceNumber()).GetValue() +
                          1; // Set the subflow sequence number and send SYN+ACK
+    if (m_isCCAgent)
+    {
+        sFlow->ccAgent = GetCongestionAgent();
+        sFlow->ccInfo = GetCongestionInfo();
+    }
+
     NS_LOG_DEBUG("CompleteFork -> RxSeqNb: " << sFlow->RxSeqNumber
                                              << " highestAck: " << sFlow->highestAck);
     SendEmptyPacket(sFlow->routeId, TcpHeader::SYN | TcpHeader::ACK);
@@ -1429,6 +1446,11 @@ MpTcpSocketBase::InitiateSubflows()
                                                 sFlow->sPort,
                                                 sFlow->dAddr,
                                                 sFlow->dPort); // Insert New Subflow to the list
+            if (m_isCCAgent)
+            {
+                sFlow->ccAgent = GetCongestionAgent();
+                sFlow->ccInfo = GetCongestionInfo();
+            }
             if (sFlow->m_endPoint == 0)
                 return -1;
             sFlow->m_endPoint->SetRxCallback(
@@ -1485,6 +1507,11 @@ MpTcpSocketBase::InitiateSingleSubflows(uint16_t randomPort)
                                         sFlow->sPort,
                                         sFlow->dAddr,
                                         sFlow->dPort);
+    if (m_isCCAgent)
+    {
+        sFlow->ccAgent = GetCongestionAgent();
+        sFlow->ccInfo = GetCongestionInfo();
+    }
     if (sFlow->m_endPoint == 0)
         return -1;
     sFlow->m_endPoint->SetRxCallback(
@@ -2540,7 +2567,9 @@ MpTcpSocketBase::ReceivedAck(uint8_t sFlowIdx, Ptr<Packet> packet, const TcpHead
                     // NS_LOG_ERROR(Simulator::Now().GetSeconds()<< " [" << m_node->GetId()<< "]
                     // Duplicated ack received for SeqgNb: " << ack << " DUPACKs: " <<
                     // sFlow->m_dupAckCount + 1);
+
                     DupAck(sFlowIdx, ptrDSN);
+
                     break;
                 }
                 // otherwise, the ACK is precisely equal to the nextTxSequence
@@ -2755,6 +2784,21 @@ MpTcpSocketBase::DupAck(uint8_t sFlowIdx, DSNMapping* ptrDSN)
     uint32_t segmentSize = sFlow->MSS;
     // calculateTotalCWND();
 
+    if (m_isCCAgent)
+    {
+        sFlow->ccInfo->numberConsecutiveDup = sFlow->m_dupAckCount;
+        sFlow->ccInfo->DupAck = 1;
+        sFlow->ccInfo->AckOrTimeout = 1;
+        sFlow->ccInfo->inflightAck = 0;
+        if (m_dupAckCount == 1)
+        {
+            sFlow->ccInfo->lastCwndDA = sFlow->cwnd;
+            sFlow->ccInfo->factorChain = 1;
+        }
+        UpdateCCInfo(sFlowIdx);
+        sFlow->ccAgent->Infer(sFlow, sFlow->ccInfo); // agent handles cwnd changes
+    }
+
     // Congestion control algorithms
     if (sFlow->m_dupAckCount == 3 && !sFlow->m_inFastRec)
     { // FastRetrasmsion
@@ -2763,13 +2807,18 @@ MpTcpSocketBase::DupAck(uint8_t sFlowIdx, DSNMapping* ptrDSN)
                     << ") 3rd duplicated ACK for segment (" << ptrDSN->subflowSeqNumber << ")");
 
         // Cut the window to the half
+
         ReduceCWND(sFlowIdx, ptrDSN);
+
         FastReTxs++;
     }
     else if (sFlow->m_inFastRec)
     { // Fast Recovery
         // Increase cwnd for every additional DupACK (RFC2582, sec.3 bullet #3)
-        sFlow->cwnd += segmentSize;
+        if (!m_isCCAgent)
+        {
+            sFlow->cwnd += segmentSize;
+        }
         NS_LOG_WARN("DupAck-> FastRecovery. Increase cwnd by one MSS, from "
                     << sFlow->cwnd.Get() << " -> " << sFlow->cwnd
                     << " AvailableWindow: " << AvailableWindow(sFlowIdx));
@@ -2849,14 +2898,31 @@ MpTcpSocketBase::NewAckNewReno(uint8_t sFlowIdx, const TcpHeader& mptcpHeader, P
     // CWND
     NS_LOG_LOGIC("TcpNewReno receieved ACK for seq " << ack << " cwnd " << sFlow->cwnd
                                                      << " ssthresh " << sFlow->ssthresh);
+
+    if (m_isCCAgent)
+    {
+        sFlow->ccInfo->AckOrTimeout = 1;
+        sFlow->ccInfo->DupAck = 0;
+        sFlow->ccInfo->inflightAck = 0;
+        sFlow->ccInfo->numberConsecutiveDup = 0; // m_dupAckCount is not updated yet
+        UpdateCCInfo(sFlowIdx);
+        if (sFlow->m_inFastRec && ack >= sFlow->m_recover)
+        {
+            sFlow->ccInfo->factorChain = 1; // resets the factor chain
+        }
+        sFlow->ccAgent->Infer(sFlow, sFlow->ccInfo);
+    }
+
     // Check for exit condition of fast recovery
     if (sFlow->m_inFastRec && ack < sFlow->m_recover)
     { // Partial ACK, partial window deflation (RFC2582 sec.3 bullet #5 paragraph 3)
         NS_LOG_WARN("NewAckNewReno -> ");
-        sFlow->cwnd -= ack.GetValue() - (sFlow->highestAck + 1); // data bytes where acked
-        // RFC3782 sec.5, partialAck condition for inflating.
-        sFlow->cwnd += sFlow->MSS; // increase cwnd
-
+        if (!m_isCCAgent)
+        {
+            sFlow->cwnd -= ack.GetValue() - (sFlow->highestAck + 1); // data bytes where acked
+            // RFC3782 sec.5, partialAck condition for inflating.
+            sFlow->cwnd += sFlow->MSS; // increase cwnd
+        }
         DiscardUpTo(sFlowIdx, ack.GetValue());
         DSNMapping* ptrDSN = getSegmentOfACK(sFlowIdx, ack.GetValue());
         NS_ASSERT(ptrDSN != 0);
@@ -2873,8 +2939,10 @@ MpTcpSocketBase::NewAckNewReno(uint8_t sFlowIdx, const TcpHeader& mptcpHeader, P
     { // Full ACK (RFC2582 sec.3 bullet #5 paragraph 2, option 1)
         // NS_LOG_UNCOND(Simulator::Now().GetSeconds() << " [" << m_node->GetId() <<"] (" <<
         // (int)sFlowIdx << ") NewAckNewReno -> FullAck");
-        sFlow->cwnd = std::min(sFlow->ssthresh, BytesInFlight(sFlowIdx) + sFlow->MSS);
-
+        if (!m_isCCAgent)
+        {
+            sFlow->cwnd = std::min(sFlow->ssthresh, BytesInFlight(sFlowIdx) + sFlow->MSS);
+        }
         // Exit from Fast recovery
         sFlow->m_inFastRec = false;
         FullAcks++;
@@ -2882,7 +2950,10 @@ MpTcpSocketBase::NewAckNewReno(uint8_t sFlowIdx, const TcpHeader& mptcpHeader, P
 
     if (!(sFlow->mapDSN.size() == 0 && sendingBuffer.Empty() && sFlow->state == FIN_WAIT_1))
         // MPTCP various congestion control algorithms...
-        OpenCWND(sFlowIdx, ackedBytes);
+        if (!m_isCCAgent)
+        {
+            OpenCWND(sFlowIdx, ackedBytes);
+        }
 
     // Complete newAck processing
     NewACK(sFlowIdx,
@@ -3197,6 +3268,15 @@ MpTcpSocketBase::window_changed()
     }
 }
 
+// TODO this function should be replaced later
+void
+MpTcpSocketBase::UpdateCCInfo(uint8_t sFlowIdx)
+{
+    Ptr<MpTcpSubFlow> sFlow = subflows[sFlowIdx];
+    sFlow->ccInfo->ratiolastCWNDDA = sFlow->ccInfo->lastCwndDA / sFlow->cwnd;
+    sFlow->ccInfo->ratiolastCWNDTO = sFlow->ccInfo->lastCwndTO / sFlow->cwnd;
+}
+
 double
 MpTcpSocketBase::drand()
 {
@@ -3407,6 +3487,34 @@ MpTcpSocketBase::GetSegSize(void) const
 }
 
 void
+MpTcpSocketBase::SetCongestionAgent(Ptr<MpTcpCongestionControlAgent> agent )
+{
+    m_ccAgent = agent;
+    m_isCCAgent = true;
+}
+
+void
+MpTcpSocketBase::SetCongestionInfoType(std::string typeID)
+{
+    m_ccInfoType = typeID;
+}
+
+Ptr<CongestionInfo>
+MpTcpSocketBase::GetCongestionInfo()
+{// creates new congestion Info item
+    // ns3 should handle the lifetime of this pointer correctly
+    Ptr<CongestionInfo> ccinfo = CreateObject<CongestionInfo>();
+    ccinfo->reset();
+    return ccinfo;
+}
+
+Ptr<MpTcpCongestionControlAgent>
+MpTcpSocketBase::GetCongestionAgent()
+{// returns always the same agent that was set with setCongestioncontrolAgent 
+    return m_ccAgent;
+}
+
+void
 MpTcpSocketBase::Retransmit(uint8_t sFlowIdx)
 {
     NS_LOG_FUNCTION(this); //
@@ -3417,7 +3525,21 @@ MpTcpSocketBase::Retransmit(uint8_t sFlowIdx)
     // size and cwnd is set to 1*MSS, then the lost packet is retransmitted and
     // TCP back to slow start
     sFlow->ssthresh = std::max(2 * sFlow->MSS, BytesInFlight(sFlowIdx) / 2);
-    sFlow->cwnd = sFlow->MSS; //  sFlow->cwnd = 1.0;
+    if (!m_isCCAgent)
+    {
+        sFlow->cwnd = sFlow->MSS; //  sFlow->cwnd = 1.0;
+    }
+    else
+    {
+        sFlow->ccInfo->AckOrTimeout = 0;
+        sFlow->ccInfo->DupAck = 0;
+        sFlow->ccInfo->inflightAck = 0;
+        sFlow->ccInfo->lastCwndTO = sFlow->cwnd; // hasn't happened yet
+        UpdateCCInfo(sFlowIdx);
+        sFlow->ccInfo->numberConsecutiveDup = m_dupAckCount;
+        sFlow->ccInfo->factorChain = 1;
+
+    }
     sFlow->TxSeqNumber =
         sFlow->highestAck +
         1; // m_nextTxSequence = m_txBuffer.HeadSequence(); // Restart from highest Ack
@@ -3579,7 +3701,9 @@ MpTcpSocketBase::ReduceCWND(uint8_t sFlowIdx, DSNMapping* ptrDSN)
     case COUPLED_EPSILON:
     case UNCOUPLED:
         sFlow->ssthresh = std::max(2 * mss, BytesInFlight(sFlowIdx) / 2);
-        sFlow->cwnd = sFlow->ssthresh + 3 * mss;
+        if(!m_isCCAgent){
+            sFlow->cwnd = sFlow->ssthresh + 3 * mss;
+        }
         break;
 
     case COUPLED_SCALABLE_TCP:
@@ -3587,7 +3711,9 @@ MpTcpSocketBase::ReduceCWND(uint8_t sFlowIdx, DSNMapping* ptrDSN)
         if (d < 0)
             d = 0;
         sFlow->ssthresh = max(2 * mss, (uint32_t)d);
-        sFlow->cwnd = sFlow->ssthresh + 3 * mss;
+        if(!m_isCCAgent){
+            sFlow->cwnd = sFlow->ssthresh + 3 * mss;
+        }
         break;
 
     case COUPLED_FULLY:
@@ -3595,7 +3721,9 @@ MpTcpSocketBase::ReduceCWND(uint8_t sFlowIdx, DSNMapping* ptrDSN)
         if (d < 0)
             d = 0;
         sFlow->ssthresh = max(2 * mss, (uint32_t)d);
-        sFlow->cwnd = sFlow->ssthresh + 3 * mss;
+        if(!m_isCCAgent){
+            sFlow->cwnd = sFlow->ssthresh + 3 * mss;
+        }
         break;
 
     case Fully_Coupled:
@@ -3603,7 +3731,9 @@ MpTcpSocketBase::ReduceCWND(uint8_t sFlowIdx, DSNMapping* ptrDSN)
         if (d < 0)
             d = 0;
         sFlow->ssthresh = std::max(2 * mss, (uint32_t)d);
-        sFlow->cwnd = sFlow->ssthresh + 3 * mss;
+        if(!m_isCCAgent){
+            sFlow->cwnd = sFlow->ssthresh + 3 * mss;
+        }
         break;
 
     default:
@@ -3722,6 +3852,11 @@ MpTcpSocketBase::LookupSubflow(Ipv4Address src, uint32_t srcPort, Ipv4Address ds
                                         sFlow->sPort,
                                         sFlow->dAddr,
                                         sFlow->dPort);
+    if (m_isCCAgent)
+    {
+        sFlow->ccAgent = GetCongestionAgent(); 
+        sFlow->ccInfo = GetCongestionInfo();    // creates new congestion Info items 
+    }
     if (sFlow->m_endPoint == 0)
         return -1;
     sFlow->m_endPoint->SetRxCallback(

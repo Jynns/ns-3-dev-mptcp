@@ -40,10 +40,15 @@
 #include "ns3/ipv4-address.h"
 #include "ns3/mp-tcp-typedef.h"
 #include "ns3/tcp-socket-base.h"
+#include "mp-tcp-cc-agent.h"
+
 
 using namespace std;
 
 namespace ns3{
+
+class MpTcpCongestionControlAgent;
+class CongestionInfo;
 
 class MpTcpSubFlow : public Object
 {
@@ -83,6 +88,8 @@ public:
   uint32_t cnRetries;         // Number of connection retries before giving up
   Time     cnTimeout;         // Timeout for connection retry
   TracedValue<uint32_t> cwnd; // Congestion window (in bytes)
+  Ptr<MpTcpCongestionControlAgent> ccAgent; //<! RL Agent that changes cwnd 
+  Ptr<CongestionInfo> ccInfo; // <! congestion Info object passed on to agent on socket level 
   uint32_t ssthresh;          // Slow start threshold
   uint32_t maxSeqNb;          // Highest sequence number of a sent byte. Equal to (TxSeqNumber - 1) until a retransmission occurs
   uint32_t highestAck;        // Highest received ACK for the subflow level sequence number

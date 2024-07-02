@@ -27,6 +27,7 @@ build_lib(
     model/mp-tcp-socket-base.cc
     model/mp-tcp-typedef.cc
     model/mp-tcp-subflow.cc
+    model/mp-tcp-cc-agent.cc
   HEADER_FILES
     helper/bulk-send-helper.h
     helper/on-off-helper.h
@@ -54,6 +55,7 @@ build_lib(
     model/udp-echo-server.h
     model/udp-server.h
     model/udp-trace-client.h
+    model/mp-tcp-cc-agent.h
   LIBRARIES_TO_LINK ${libinternet}
                     ${libstats}
   TEST_SOURCES
