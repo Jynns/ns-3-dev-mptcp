@@ -24,6 +24,10 @@ build_lib(
     model/udp-echo-server.cc
     model/udp-server.cc
     model/udp-trace-client.cc
+    model/mp-tcp-socket-base.cc
+    model/mp-tcp-typedef.cc
+    model/mp-tcp-subflow.cc
+    model/mp-tcp-cc-agent.cc
   HEADER_FILES
     helper/bulk-send-helper.h
     helper/on-off-helper.h
@@ -33,6 +37,9 @@ build_lib(
     helper/udp-echo-helper.h
     model/application-packet-probe.h
     model/bulk-send-application.h
+    model/mp-tcp-socket-base.h
+    model/mp-tcp-typedef.h
+    model/mp-tcp-subflow.h
     model/onoff-application.h
     model/packet-loss-counter.h
     model/packet-sink.h
@@ -48,6 +55,7 @@ build_lib(
     model/udp-echo-server.h
     model/udp-server.h
     model/udp-trace-client.h
+    model/mp-tcp-cc-agent.h
   LIBRARIES_TO_LINK ${libinternet}
   TEST_SOURCES
     test/three-gpp-http-client-server-test.cc

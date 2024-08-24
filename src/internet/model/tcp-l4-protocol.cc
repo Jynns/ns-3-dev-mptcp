@@ -36,6 +36,7 @@
 #include "tcp-recovery-ops.h"
 #include "tcp-socket-base.h"
 #include "tcp-socket-factory-impl.h"
+#include "mp-tcp-option.h"
 
 #include "ns3/assert.h"
 #include "ns3/boolean.h"
@@ -45,6 +46,7 @@
 #include "ns3/object-map.h"
 #include "ns3/packet.h"
 #include "ns3/simulator.h"
+#include "ns3/mp-tcp-socket-base.h"
 
 #include <iomanip>
 #include <sstream>
@@ -198,23 +200,34 @@ TcpL4Protocol::CreateSocket(TypeId congestionTypeId)
 Ptr<Socket>
 TcpL4Protocol::CreateSocket(TypeId congestionTypeId, TypeId recoveryTypeId)
 {
-    NS_LOG_FUNCTION(this << congestionTypeId.GetName());
-    ObjectFactory rttFactory;
-    ObjectFactory congestionAlgorithmFactory;
-    ObjectFactory recoveryAlgorithmFactory;
-    rttFactory.SetTypeId(m_rttTypeId);
-    congestionAlgorithmFactory.SetTypeId(congestionTypeId);
-    recoveryAlgorithmFactory.SetTypeId(recoveryTypeId);
 
-    Ptr<RttEstimator> rtt = rttFactory.Create<RttEstimator>();
-    Ptr<TcpSocketBase> socket = CreateObject<TcpSocketBase>();
-    Ptr<TcpCongestionOps> algo = congestionAlgorithmFactory.Create<TcpCongestionOps>();
+    Ptr<TcpSocketBase> socket;
+    NS_LOG_FUNCTION(this << congestionTypeId.GetName());
+    if(congestionTypeId == TypeId::LookupByName("ns3::MpTcpSocketBase")){
+        socket = CreateObject<MpTcpSocketBase>();
+    }else{
+        socket = CreateObject<TcpSocketBase>();
+        
+        ObjectFactory congestionAlgorithmFactory;
+        
+        congestionAlgorithmFactory.SetTypeId(congestionTypeId);
+        
+        Ptr<TcpCongestionOps> algo = congestionAlgorithmFactory.Create<TcpCongestionOps>();
+
+        socket->SetCongestionControlAlgorithm(algo);
+    }
+    ObjectFactory rttFactory;
+    ObjectFactory recoveryAlgorithmFactory;
+
+    recoveryAlgorithmFactory.SetTypeId(recoveryTypeId);
+    rttFactory.SetTypeId(m_rttTypeId);
+
     Ptr<TcpRecoveryOps> recovery = recoveryAlgorithmFactory.Create<TcpRecoveryOps>();
+    Ptr<RttEstimator> rtt = rttFactory.Create<RttEstimator>();
 
     socket->SetNode(m_node);
     socket->SetTcp(this);
     socket->SetRtt(rtt);
-    socket->SetCongestionControlAlgorithm(algo);
     socket->SetRecoveryAlgorithm(recovery);
 
     m_sockets[m_socketIndex++] = socket;
@@ -400,6 +413,8 @@ TcpL4Protocol::PacketReceived(Ptr<Packet> packet,
 
     packet->PeekHeader(incomingTcpHeader);
 
+    
+
     NS_LOG_LOGIC("TcpL4Protocol " << this << " receiving seq "
                                   << incomingTcpHeader.GetSequenceNumber() << " ack "
                                   << incomingTcpHeader.GetAckNumber() << " flags "
@@ -471,6 +486,38 @@ TcpL4Protocol::Receive(Ptr<Packet> packet,
     {
         return checksumControl;
     }
+
+    // MPTCP related modification----------------------------
+    // Extract MPTCP options if there is any
+    //packetreceived extracted header and saved it in incoming tcpheader
+
+    uint8_t flags = incomingTcpHeader.GetFlags();
+    bool hasSyn = flags & TcpHeader::SYN;
+    uint32_t Token;
+
+    if(incomingTcpHeader.HasOption(TcpOption::Kind::MP_MPC) && hasSyn){
+        // In this case the endpoint with destination port and token value of zero need to be
+        // find.
+        NS_LOG_INFO("TcpL4Protocol::Receive -> OPT_MPC -> Do NOTTING");
+    }
+    else if(incomingTcpHeader.HasOption(TcpOption::Kind::MP_JOIN) && hasSyn){
+        // In this case there should be endPoint with this token, so look for a match on all
+        // endpoints.
+            Token = DynamicCast<const MpTcpOptionJoin>(incomingTcpHeader.GetOption(TcpOption::Kind::MP_JOIN))->m_senderToken;
+            TokenMaps::iterator it;
+            it = m_TokenMap.find(Token);
+            if (it != m_TokenMap.end())
+            {
+                NS_LOG_INFO("TcpL4Protocol::Receive -> OPT_JOIN -> Token "
+                            << Token << " has find forwardup to it");
+                ((*it).second)->ForwardUp(packet, incomingIpHeader, incomingTcpHeader.GetSourcePort(), incomingInterface);
+                return IpL4Protocol::RX_OK;
+            }else{
+                NS_LOG_INFO("Couldn't find "<< Token << " in local Token Map :( ");
+            }
+
+    }
+    //---------------------------------------------------------
 
     Ipv4EndPointDemux::EndPoints endPoints;
     endPoints = m_endPoints->Lookup(incomingIpHeader.GetDestination(),
